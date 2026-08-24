@@ -141,7 +141,7 @@ fn decoder_rejects_invalid_utf8() {
 
 #[test]
 fn decoder_rejects_an_over_limit_buffer_and_clears_it() {
-    let mut decoder = JsonLineDecoder::new(/* max_line_bytes */ 8);
+    let mut decoder = JsonLineDecoder::new(/*max_line_bytes*/ 8);
 
     let error = decoder.push(b"123456789").unwrap_err();
 
