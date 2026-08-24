@@ -1,44 +1,26 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
-use std::sync::mpsc;
-use std::sync::mpsc::RecvTimeoutError;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
-use std::time::Instant;
 
-use tauri::AppHandle;
-use tauri::Emitter;
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandChild;
-use tauri_plugin_shell::process::CommandEvent;
-
+use crate::app_server::connection::AppServerConnection;
 use crate::app_server::protocol::initialize_request;
 use crate::app_server::protocol::initialized_notification;
 use crate::app_server::protocol::parse_initialize_response;
+use crate::app_server::transport::ProcessControl;
+use crate::app_server::transport::ProcessLauncher;
+use crate::app_server::transport::ProcessTransport;
+use crate::app_server::transport::TransportReadError;
+use crate::app_server::transport::log_diagnostic;
+use crate::app_server::wire::parse_inbound_message;
 use crate::runtime_status::RuntimeStatus;
 
 const STARTUP_ERROR_MESSAGE: &str = "核心服务暂时无法启动。";
-const MAX_DIAGNOSTIC_CHARS: usize = 512;
-const SIDECAR_NAME: &str = "codex-app-server";
-const INITIALIZATION_TIMEOUT: Duration = Duration::from_secs(10);
-const RUNTIME_STATUS_CHANGED_EVENT: &str = "runtime-status-changed";
-
-pub(super) trait ProcessLauncher: Send {
-    fn launch(&mut self) -> Result<Box<dyn ProcessChild>, String>;
-}
-
-pub(super) trait ProcessChild: Send {
-    fn write(&mut self, message: &str) -> Result<(), String>;
-    fn receive_line(&mut self, timeout: Duration) -> Result<String, ChildReadError>;
-    fn terminate(&mut self) -> Result<(), String>;
-}
-
-#[derive(Debug)]
-pub(super) enum ChildReadError {
-    Timeout,
-    Transport(String),
-}
+const READER_POLL_INTERVAL: Duration = Duration::from_millis(/*millis*/ 25);
 
 pub(super) trait StatusObserver: Send + Sync {
     fn on_status(&self, status: &RuntimeStatus);
@@ -47,59 +29,27 @@ pub(super) trait StatusObserver: Send + Sync {
 pub(crate) struct AppServerSupervisor {
     launcher: Box<dyn ProcessLauncher>,
     observer: Arc<dyn StatusObserver>,
-    child: Option<Box<dyn ProcessChild>>,
-    status: RuntimeStatus,
+    lifecycle: Arc<Mutex<LifecycleState>>,
+    reader: Option<ReaderTask>,
     initialization_timeout: Duration,
 }
 
-pub(crate) struct AppServerState {
-    supervisor: Mutex<AppServerSupervisor>,
-    status: Arc<RuntimeStatusStore>,
+struct LifecycleState {
+    status: RuntimeStatus,
+    next_generation: u64,
+    active: Option<ActiveProcess>,
 }
 
-impl AppServerState {
-    pub(crate) fn new(app_handle: AppHandle, codex_home: PathBuf) -> Self {
-        let status = Arc::new(RuntimeStatusStore::new(app_handle.clone()));
-        let observer: Arc<dyn StatusObserver> = status.clone();
-        let launcher = Box::new(TauriProcessLauncher {
-            app_handle,
-            codex_home,
-        });
+struct ActiveProcess {
+    generation: u64,
+    connection: AppServerConnection,
+    control: Arc<dyn ProcessControl>,
+    stop: Arc<AtomicBool>,
+}
 
-        Self {
-            supervisor: Mutex::new(AppServerSupervisor::new(
-                launcher,
-                observer,
-                INITIALIZATION_TIMEOUT,
-            )),
-            status,
-        }
-    }
-
-    pub(crate) fn current_status(&self) -> RuntimeStatus {
-        self.status.current()
-    }
-
-    pub(crate) fn start(&self) -> RuntimeStatus {
-        self.supervisor
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .start()
-    }
-
-    pub(crate) fn retry(&self) -> RuntimeStatus {
-        self.supervisor
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retry()
-    }
-
-    pub(crate) fn shutdown(&self) -> RuntimeStatus {
-        self.supervisor
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .shutdown()
-    }
+struct ReaderTask {
+    stop: Arc<AtomicBool>,
+    handle: JoinHandle<()>,
 }
 
 impl AppServerSupervisor {
@@ -114,287 +64,311 @@ impl AppServerSupervisor {
         Self {
             launcher,
             observer,
-            child: None,
-            status,
+            lifecycle: Arc::new(Mutex::new(LifecycleState {
+                status,
+                next_generation: 1,
+                active: None,
+            })),
+            reader: None,
             initialization_timeout,
         }
     }
 
     pub(crate) fn start(&mut self) -> RuntimeStatus {
+        let status = self.current_status();
         if matches!(
-            self.status,
+            status,
             RuntimeStatus::Starting | RuntimeStatus::Connected { .. }
         ) {
-            return self.status.clone();
+            return status;
         }
 
+        self.join_reader();
         self.transition(RuntimeStatus::Starting);
-        let mut child = match self.launcher.launch() {
-            Ok(child) => child,
+        let mut transport = match self.launcher.launch() {
+            Ok(transport) => transport,
             Err(error) => return self.fail("launch failed", &error),
         };
 
-        let result = self.initialize(&mut *child);
-        match result {
-            Ok(status) => {
-                self.child = Some(child);
-                self.transition(status)
-            }
+        let status = match self.initialize(&mut transport) {
+            Ok(status) => status,
             Err(error) => {
-                if let Err(terminate_error) = child.terminate() {
+                if let Err(terminate_error) = transport.control().terminate() {
                     log_diagnostic("cleanup failed", &terminate_error);
                 }
-                self.fail("initialization failed", &error)
+                return self.fail("initialization failed", &error);
             }
-        }
+        };
+
+        self.activate_connection(transport, status)
     }
 
     pub(crate) fn retry(&mut self) -> RuntimeStatus {
-        if matches!(self.status, RuntimeStatus::Error { .. }) {
+        if matches!(self.current_status(), RuntimeStatus::Error { .. }) {
             self.start()
         } else {
-            self.status.clone()
+            self.current_status()
         }
     }
 
     pub(crate) fn shutdown(&mut self) -> RuntimeStatus {
-        if matches!(self.status, RuntimeStatus::Stopped) {
-            return self.status.clone();
+        if matches!(self.current_status(), RuntimeStatus::Stopped) {
+            return RuntimeStatus::Stopped;
         }
 
-        if let Some(mut child) = self.child.take()
-            && let Err(error) = child.terminate()
-        {
-            log_diagnostic("shutdown failed", &error);
-        }
+        self.cleanup_active("shutdown failed");
+        self.join_reader();
         self.transition(RuntimeStatus::Stopped)
     }
 
-    fn initialize(&self, child: &mut dyn ProcessChild) -> Result<RuntimeStatus, String> {
-        let request = initialize_request().map_err(|error| error.to_string())?;
-        child.write(&request)?;
+    pub(super) fn connection(&self) -> Option<AppServerConnection> {
+        self.lifecycle
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .active
+            .as_ref()
+            .map(|active| active.connection.clone())
+    }
 
-        let response =
-            child
-                .receive_line(self.initialization_timeout)
-                .map_err(|error| match error {
-                    ChildReadError::Timeout => "initialization timed out".to_string(),
-                    ChildReadError::Transport(message) => message,
-                })?;
+    fn initialize(&self, transport: &mut ProcessTransport) -> Result<RuntimeStatus, String> {
+        let control = transport.control();
+        let request = initialize_request().map_err(|error| error.to_string())?;
+        control.write(&request)?;
+
+        let response = transport
+            .receive_line(self.initialization_timeout)
+            .map_err(transport_error_detail)?;
         let status = parse_initialize_response(&response).map_err(|error| error.to_string())?;
 
         let notification = initialized_notification().map_err(|error| error.to_string())?;
-        child.write(&notification)?;
+        control.write(&notification)?;
         Ok(status)
     }
 
-    fn fail(&mut self, context: &str, detail: &str) -> RuntimeStatus {
-        log_diagnostic(context, detail);
-        self.transition(RuntimeStatus::Error {
-            message: STARTUP_ERROR_MESSAGE.to_string(),
-            retryable: true,
-        })
+    fn activate_connection(
+        &mut self,
+        transport: ProcessTransport,
+        status: RuntimeStatus,
+    ) -> RuntimeStatus {
+        let control = transport.control();
+        let writer = control.clone();
+        let connection = AppServerConnection::new(move |message| writer.write(message));
+        let stop = Arc::new(AtomicBool::new(false));
+        let generation = {
+            let mut lifecycle = self
+                .lifecycle
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            let generation = lifecycle.next_generation;
+            lifecycle.next_generation = lifecycle.next_generation.wrapping_add(1);
+            lifecycle.status = status.clone();
+            lifecycle.active = Some(ActiveProcess {
+                generation,
+                connection: connection.clone(),
+                control,
+                stop: stop.clone(),
+            });
+            generation
+        };
+        self.observer.on_status(&status);
+
+        let lifecycle = self.lifecycle.clone();
+        let observer = self.observer.clone();
+        let reader_stop = stop.clone();
+        let reader = thread::Builder::new()
+            .name("rivloom-app-server-reader".to_string())
+            .spawn(move || {
+                read_messages(
+                    transport,
+                    connection,
+                    lifecycle,
+                    observer,
+                    generation,
+                    reader_stop,
+                );
+            });
+
+        match reader {
+            Ok(handle) => {
+                self.reader = Some(ReaderTask { stop, handle });
+                status
+            }
+            Err(error) => {
+                fail_active_connection(
+                    &self.lifecycle,
+                    &self.observer,
+                    generation,
+                    "reader start failed",
+                    &error.to_string(),
+                    true,
+                );
+                self.current_status()
+            }
+        }
     }
 
-    fn transition(&mut self, status: RuntimeStatus) -> RuntimeStatus {
-        self.status = status;
-        self.observer.on_status(&self.status);
-        self.status.clone()
+    fn current_status(&self) -> RuntimeStatus {
+        self.lifecycle
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .status
+            .clone()
+    }
+
+    fn fail(&self, context: &str, detail: &str) -> RuntimeStatus {
+        log_diagnostic(context, detail);
+        self.transition(startup_error_status())
+    }
+
+    fn transition(&self, status: RuntimeStatus) -> RuntimeStatus {
+        self.lifecycle
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .status = status.clone();
+        self.observer.on_status(&status);
+        status
+    }
+
+    fn cleanup_active(&self, context: &str) {
+        let active = self
+            .lifecycle
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .active
+            .take();
+        if let Some(active) = active {
+            active.stop.store(true, Ordering::Release);
+            active.connection.disconnect();
+            if let Err(error) = active.control.terminate() {
+                log_diagnostic(context, &error);
+            }
+        }
+    }
+
+    fn join_reader(&mut self) {
+        if let Some(reader) = self.reader.take() {
+            reader.stop.store(true, Ordering::Release);
+            if reader.handle.join().is_err() {
+                log_diagnostic("reader join failed", "reader thread panicked");
+            }
+        }
     }
 }
 
 impl Drop for AppServerSupervisor {
     fn drop(&mut self) {
-        if let Some(mut child) = self.child.take()
-            && let Err(error) = child.terminate()
+        self.cleanup_active("drop cleanup failed");
+        self.join_reader();
+    }
+}
+
+fn read_messages(
+    mut transport: ProcessTransport,
+    connection: AppServerConnection,
+    lifecycle: Arc<Mutex<LifecycleState>>,
+    observer: Arc<dyn StatusObserver>,
+    generation: u64,
+    stop: Arc<AtomicBool>,
+) {
+    while !stop.load(Ordering::Acquire) {
+        let line = match transport.receive_line(READER_POLL_INTERVAL) {
+            Ok(line) => line,
+            Err(TransportReadError::Timeout) => continue,
+            Err(error) => {
+                let terminate = !matches!(error, TransportReadError::Terminated(_));
+                let detail = transport_error_detail(error);
+                fail_active_connection(
+                    &lifecycle,
+                    &observer,
+                    generation,
+                    "connection lost",
+                    &detail,
+                    terminate,
+                );
+                return;
+            }
+        };
+
+        let message = match parse_inbound_message(&line) {
+            Ok(message) => message,
+            Err(error) => {
+                fail_active_connection(
+                    &lifecycle,
+                    &observer,
+                    generation,
+                    "protocol read failed",
+                    &error.to_string(),
+                    true,
+                );
+                return;
+            }
+        };
+        if let Err(error) = connection.handle_inbound(message) {
+            fail_active_connection(
+                &lifecycle,
+                &observer,
+                generation,
+                "protocol routing failed",
+                &error.to_string(),
+                true,
+            );
+            return;
+        }
+    }
+
+    connection.disconnect();
+}
+
+fn fail_active_connection(
+    lifecycle: &Mutex<LifecycleState>,
+    observer: &Arc<dyn StatusObserver>,
+    generation: u64,
+    context: &str,
+    detail: &str,
+    terminate: bool,
+) {
+    let status = startup_error_status();
+    let active = {
+        let mut lifecycle = lifecycle.lock().unwrap_or_else(PoisonError::into_inner);
+        if lifecycle
+            .active
+            .as_ref()
+            .is_none_or(|active| active.generation != generation)
         {
-            log_diagnostic("drop cleanup failed", &error);
+            return;
+        }
+        let active = lifecycle.active.take();
+        lifecycle.status = status.clone();
+        active
+    };
+
+    if let Some(active) = active {
+        active.stop.store(true, Ordering::Release);
+        active.connection.disconnect();
+        if terminate && let Err(error) = active.control.terminate() {
+            log_diagnostic("connection cleanup failed", &error);
         }
     }
+    log_diagnostic(context, detail);
+    observer.on_status(&status);
 }
 
-fn log_diagnostic(context: &str, detail: &str) {
-    let detail = detail
-        .chars()
-        .take(MAX_DIAGNOSTIC_CHARS)
-        .map(|character| {
-            if character.is_control() {
-                ' '
-            } else {
-                character
-            }
-        })
-        .collect::<String>();
-    eprintln!("Rivloom App Server {context}: {detail}");
-}
-
-struct RuntimeStatusStore {
-    app_handle: AppHandle,
-    current: Mutex<RuntimeStatus>,
-}
-
-impl RuntimeStatusStore {
-    fn new(app_handle: AppHandle) -> Self {
-        Self {
-            app_handle,
-            current: Mutex::new(RuntimeStatus::Stopped),
+fn transport_error_detail(error: TransportReadError) -> String {
+    match error {
+        TransportReadError::Timeout => "App Server response timed out".to_string(),
+        TransportReadError::InvalidMessage(error) => error.to_string(),
+        TransportReadError::Transport(message) => message,
+        TransportReadError::Terminated(code) => {
+            format!("App Server process terminated with code {code:?}")
         }
-    }
-
-    fn current(&self) -> RuntimeStatus {
-        self.current
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        TransportReadError::Closed => "App Server event channel closed".to_string(),
     }
 }
 
-impl StatusObserver for RuntimeStatusStore {
-    fn on_status(&self, status: &RuntimeStatus) {
-        *self.current.lock().unwrap_or_else(PoisonError::into_inner) = status.clone();
-
-        if let Err(error) = self
-            .app_handle
-            .emit_to("main", RUNTIME_STATUS_CHANGED_EVENT, status)
-        {
-            log_diagnostic("status event failed", &error.to_string());
-        }
-
-        #[cfg(debug_assertions)]
-        log_runtime_status(status);
-    }
-}
-
-#[cfg(debug_assertions)]
-fn log_runtime_status(status: &RuntimeStatus) {
-    match status {
-        RuntimeStatus::Starting => log_diagnostic("status", "starting"),
-        RuntimeStatus::Connected {
-            app_server_user_agent,
-            platform,
-            codex_home,
-            ..
-        } => log_diagnostic(
-            "status",
-            &format!(
-                "connected; userAgent={app_server_user_agent}; platform={platform}; codexHome={codex_home}"
-            ),
-        ),
-        RuntimeStatus::Error { .. } => log_diagnostic("status", "error"),
-        RuntimeStatus::Stopped => log_diagnostic("status", "stopped"),
-    }
-}
-
-struct TauriProcessLauncher {
-    app_handle: AppHandle,
-    codex_home: PathBuf,
-}
-
-impl ProcessLauncher for TauriProcessLauncher {
-    fn launch(&mut self) -> Result<Box<dyn ProcessChild>, String> {
-        std::fs::create_dir_all(&self.codex_home)
-            .map_err(|error| format!("failed to create Codex home: {error}"))?;
-
-        let command = self
-            .app_handle
-            .shell()
-            .sidecar(SIDECAR_NAME)
-            .map_err(|error| format!("failed to resolve bundled sidecar: {error}"))?
-            .env("CODEX_HOME", &self.codex_home);
-        let (mut events, child) = command
-            .spawn()
-            .map_err(|error| format!("failed to spawn bundled sidecar: {error}"))?;
-        let (event_sender, event_receiver) = mpsc::channel();
-
-        let _event_forwarder = tauri::async_runtime::spawn(async move {
-            while let Some(event) = events.recv().await {
-                let transport_event = match event {
-                    CommandEvent::Stdout(bytes) => TransportEvent::Stdout(bytes),
-                    CommandEvent::Stderr(bytes) => {
-                        log_diagnostic("stderr", &String::from_utf8_lossy(&bytes));
-                        continue;
-                    }
-                    CommandEvent::Error(message) => TransportEvent::Error(message),
-                    CommandEvent::Terminated(payload) => TransportEvent::Terminated(payload.code),
-                    _ => continue,
-                };
-
-                if event_sender.send(transport_event).is_err() {
-                    break;
-                }
-            }
-        });
-
-        Ok(Box::new(TauriProcessChild {
-            child: Some(child),
-            events: event_receiver,
-        }))
-    }
-}
-
-enum TransportEvent {
-    Stdout(Vec<u8>),
-    Error(String),
-    Terminated(Option<i32>),
-}
-
-struct TauriProcessChild {
-    child: Option<CommandChild>,
-    events: mpsc::Receiver<TransportEvent>,
-}
-
-impl ProcessChild for TauriProcessChild {
-    fn write(&mut self, message: &str) -> Result<(), String> {
-        self.child
-            .as_mut()
-            .ok_or_else(|| "App Server process is no longer running".to_string())?
-            .write(message.as_bytes())
-            .map_err(|error| format!("failed to write to App Server stdin: {error}"))
-    }
-
-    fn receive_line(&mut self, timeout: Duration) -> Result<String, ChildReadError> {
-        let deadline = Instant::now() + timeout;
-
-        loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(ChildReadError::Timeout);
-            }
-
-            match self.events.recv_timeout(remaining) {
-                Ok(TransportEvent::Stdout(bytes)) => {
-                    return String::from_utf8(bytes).map_err(|_| {
-                        ChildReadError::Transport(
-                            "App Server stdout was not valid UTF-8".to_string(),
-                        )
-                    });
-                }
-                Ok(TransportEvent::Error(message)) => {
-                    return Err(ChildReadError::Transport(message));
-                }
-                Ok(TransportEvent::Terminated(code)) => {
-                    return Err(ChildReadError::Transport(format!(
-                        "App Server exited before initialization completed with code {code:?}"
-                    )));
-                }
-                Err(RecvTimeoutError::Timeout) => return Err(ChildReadError::Timeout),
-                Err(RecvTimeoutError::Disconnected) => {
-                    return Err(ChildReadError::Transport(
-                        "App Server event channel closed before initialization completed"
-                            .to_string(),
-                    ));
-                }
-            }
-        }
-    }
-
-    fn terminate(&mut self) -> Result<(), String> {
-        if let Some(child) = self.child.take() {
-            child
-                .kill()
-                .map_err(|error| format!("failed to terminate App Server: {error}"))?;
-        }
-        Ok(())
+fn startup_error_status() -> RuntimeStatus {
+    RuntimeStatus::Error {
+        message: STARTUP_ERROR_MESSAGE.to_string(),
+        retryable: true,
     }
 }
 

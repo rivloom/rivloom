@@ -1,28 +1,40 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::thread;
 use std::time::Duration;
+use std::time::Instant;
+
+use pretty_assertions::assert_eq;
+use serde_json::Value;
+use serde_json::json;
 
 use super::AppServerSupervisor;
-use super::ChildReadError;
-use super::ProcessChild;
-use super::ProcessLauncher;
 use super::StatusObserver;
+use crate::app_server::connection::ConnectionControl;
+use crate::app_server::connection::ConnectionError;
+use crate::app_server::connection::NotificationObserver;
 use crate::app_server::protocol::initialize_request;
 use crate::app_server::protocol::initialized_notification;
+use crate::app_server::transport::ProcessControl;
+use crate::app_server::transport::ProcessLauncher;
+use crate::app_server::transport::ProcessTransport;
+use crate::app_server::transport::TransportEvent;
 use crate::runtime_status::RuntimeStatus;
 
 const STARTUP_ERROR_MESSAGE: &str = "核心服务暂时无法启动。";
+const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 1);
 
 #[test]
 fn successful_start_transitions_from_stopped_through_starting_to_connected() {
     let observer = Arc::new(RecordingObserver::default());
-    let mut supervisor = supervisor_with(
-        FakeLauncher::succeeding(success_response()),
-        observer.clone(),
-    );
+    let (process, _handle) = FakeProcess::with_initialize_response();
+    let mut supervisor =
+        supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
     assert_eq!(supervisor.start(), connected_status());
     assert_eq!(
@@ -39,12 +51,11 @@ fn successful_start_transitions_from_stopped_through_starting_to_connected() {
 fn launch_failure_transitions_from_stopped_through_starting_to_error() {
     let observer = Arc::new(RecordingObserver::default());
     let mut supervisor = supervisor_with(
-        FakeLauncher::failing("sidecar could not start"),
+        FakeLauncher::with_attempts([Err("sidecar could not start".to_string())]),
         observer.clone(),
     );
-    let expected_error = startup_error_status();
 
-    assert_eq!(supervisor.start(), expected_error);
+    assert_eq!(supervisor.start(), startup_error_status());
     assert_eq!(
         observer.statuses(),
         vec![
@@ -56,38 +67,141 @@ fn launch_failure_transitions_from_stopped_through_starting_to_error() {
 }
 
 #[test]
-fn shutdown_terminates_a_connected_child_and_transitions_to_stopped() {
+fn successful_handshake_keeps_initialize_at_zero_then_writes_initialized() {
     let observer = Arc::new(RecordingObserver::default());
-    let terminated = Arc::new(AtomicBool::new(false));
-    let launcher = FakeLauncher::with_attempts([Ok(FakeChild::new(
-        [Ok(success_response())],
-        Arc::new(Mutex::new(Vec::new())),
-        terminated.clone(),
-    ))]);
-    let mut supervisor = supervisor_with(launcher, observer.clone());
+    let (process, handle) = FakeProcess::with_initialize_response();
+    let mut supervisor = supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer);
 
     assert_eq!(supervisor.start(), connected_status());
-    assert_eq!(supervisor.shutdown(), RuntimeStatus::Stopped);
-    assert_eq!(supervisor.shutdown(), RuntimeStatus::Stopped);
-    assert!(terminated.load(Ordering::SeqCst));
     assert_eq!(
-        observer.statuses(),
+        handle.writes(),
         vec![
-            RuntimeStatus::Stopped,
-            RuntimeStatus::Starting,
-            connected_status(),
-            RuntimeStatus::Stopped,
+            initialize_request().unwrap(),
+            initialized_notification().unwrap(),
         ]
+    );
+    let initialize: Value = serde_json::from_str(&handle.writes()[0]).unwrap();
+    assert_eq!(initialize["id"], json!(0));
+}
+
+#[test]
+fn post_initialize_response_is_delivered_to_the_waiting_request() {
+    let observer = Arc::new(RecordingObserver::default());
+    let (process, handle) = FakeProcess::with_initialize_response();
+    let mut supervisor = supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer);
+    assert_eq!(supervisor.start(), connected_status());
+
+    let connection = supervisor.connection().expect("connected handle");
+    let request =
+        thread::spawn(move || connection.request("account/read", json!({ "refreshToken": false })));
+    wait_until(|| handle.writes().len() == 3);
+
+    assert!(handle.send_json(json!({
+        "id": 1,
+        "result": { "account": null }
+    })));
+    assert_eq!(request.join().unwrap(), Ok(json!({ "account": null })));
+}
+
+#[test]
+fn post_initialize_notification_is_delivered_to_the_observer() {
+    let observer = Arc::new(RecordingObserver::default());
+    let notifications = Arc::new(RecordingNotificationObserver::default());
+    let (process, handle) = FakeProcess::with_initialize_response();
+    let mut supervisor = supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer);
+    assert_eq!(supervisor.start(), connected_status());
+
+    let connection = supervisor.connection().expect("connected handle");
+    connection.set_notification_observer(notifications.clone());
+    assert!(handle.send_json(json!({
+        "method": "account/updated",
+        "params": { "authMode": "chatgpt" }
+    })));
+    wait_until(|| !notifications.notifications().is_empty());
+
+    assert_eq!(
+        notifications.notifications(),
+        vec![(
+            "account/updated".to_string(),
+            json!({ "authMode": "chatgpt" }),
+        )]
     );
 }
 
 #[test]
-fn manual_retry_transitions_from_error_back_through_starting_to_connected() {
+fn process_termination_fails_pending_request_and_enters_runtime_error() {
     let observer = Arc::new(RecordingObserver::default());
-    let launcher = FakeLauncher::with_attempts([
-        Err("first launch failed".to_string()),
-        Ok(FakeChild::succeeding(success_response())),
-    ]);
+    let (process, handle) = FakeProcess::with_initialize_response();
+    let mut supervisor =
+        supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
+    assert_eq!(supervisor.start(), connected_status());
+
+    let connection = supervisor.connection().expect("connected handle");
+    let request = thread::spawn(move || connection.request("account/read", json!({})));
+    wait_until(|| handle.writes().len() == 3);
+    assert!(handle.send_event(TransportEvent::Terminated(Some(23))));
+
+    assert_eq!(request.join().unwrap(), Err(ConnectionError::Disconnected));
+    wait_until(|| observer.statuses().last() == Some(&startup_error_status()));
+    assert!(supervisor.connection().is_none());
+}
+
+#[test]
+fn retry_after_termination_uses_a_new_connection() {
+    let observer = Arc::new(RecordingObserver::default());
+    let (first_process, first_handle) = FakeProcess::with_initialize_response();
+    let (second_process, second_handle) = FakeProcess::with_initialize_response();
+    let mut supervisor = supervisor_with(
+        FakeLauncher::with_attempts([Ok(first_process), Ok(second_process)]),
+        observer.clone(),
+    );
+    assert_eq!(supervisor.start(), connected_status());
+    let old_connection = supervisor.connection().expect("first connection");
+
+    assert!(first_handle.send_event(TransportEvent::Terminated(Some(1))));
+    wait_until(|| observer.statuses().last() == Some(&startup_error_status()));
+    assert_eq!(supervisor.retry(), connected_status());
+    assert_eq!(
+        old_connection.request("account/read", json!({})),
+        Err(ConnectionError::Disconnected)
+    );
+
+    let new_connection = supervisor.connection().expect("second connection");
+    let request = thread::spawn(move || new_connection.request("account/read", json!({})));
+    wait_until(|| second_handle.writes().len() == 3);
+    assert!(second_handle.send_json(json!({
+        "id": 1,
+        "result": { "account": null }
+    })));
+    assert_eq!(request.join().unwrap(), Ok(json!({ "account": null })));
+    assert_eq!(first_handle.writes().len(), 2);
+}
+
+#[test]
+fn shutdown_stops_reader_and_terminates_the_process_once() {
+    let observer = Arc::new(RecordingObserver::default());
+    let (process, handle) = FakeProcess::with_initialize_response();
+    let mut supervisor =
+        supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
+    assert_eq!(supervisor.start(), connected_status());
+
+    assert_eq!(supervisor.shutdown(), RuntimeStatus::Stopped);
+    assert_eq!(supervisor.shutdown(), RuntimeStatus::Stopped);
+    assert_eq!(handle.terminate_calls(), 1);
+    assert!(!handle.send_json(json!({
+        "method": "account/updated",
+        "params": {}
+    })));
+    assert!(supervisor.connection().is_none());
+    assert_eq!(observer.statuses().last(), Some(&RuntimeStatus::Stopped));
+}
+
+#[test]
+fn manual_retry_transitions_from_launch_error_to_connected() {
+    let observer = Arc::new(RecordingObserver::default());
+    let (process, _handle) = FakeProcess::with_initialize_response();
+    let launcher =
+        FakeLauncher::with_attempts([Err("first launch failed".to_string()), Ok(process)]);
     let mut supervisor = supervisor_with(launcher, observer.clone());
 
     assert_eq!(supervisor.start(), startup_error_status());
@@ -105,38 +219,14 @@ fn manual_retry_transitions_from_error_back_through_starting_to_connected() {
 }
 
 #[test]
-fn successful_handshake_writes_initialize_then_initialized() {
-    let writes = Arc::new(Mutex::new(Vec::new()));
-    let launcher = FakeLauncher::with_attempts([Ok(FakeChild::new(
-        [Ok(success_response())],
-        writes.clone(),
-        Arc::new(AtomicBool::new(false)),
-    ))]);
-    let mut supervisor = supervisor_with(launcher, Arc::new(RecordingObserver::default()));
-
-    assert_eq!(supervisor.start(), connected_status());
-    assert_eq!(
-        *writes.lock().unwrap(),
-        vec![
-            initialize_request().unwrap(),
-            initialized_notification().unwrap(),
-        ]
-    );
-}
-
-#[test]
-fn initialization_timeout_transitions_to_error_and_terminates_the_child() {
+fn initialization_timeout_transitions_to_error_and_terminates_the_process() {
     let observer = Arc::new(RecordingObserver::default());
-    let terminated = Arc::new(AtomicBool::new(false));
-    let launcher = FakeLauncher::with_attempts([Ok(FakeChild::new(
-        [Err(ChildReadError::Timeout)],
-        Arc::new(Mutex::new(Vec::new())),
-        terminated.clone(),
-    ))]);
-    let mut supervisor = supervisor_with(launcher, observer.clone());
+    let (process, handle) = FakeProcess::without_events();
+    let mut supervisor =
+        supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
     assert_eq!(supervisor.start(), startup_error_status());
-    assert!(terminated.load(Ordering::SeqCst));
+    assert_eq!(handle.terminate_calls(), 1);
     assert_eq!(observer.statuses().last(), Some(&startup_error_status()));
 }
 
@@ -144,11 +234,15 @@ fn supervisor_with(
     launcher: FakeLauncher,
     observer: Arc<RecordingObserver>,
 ) -> AppServerSupervisor {
-    AppServerSupervisor::new(Box::new(launcher), observer, Duration::from_millis(5))
+    AppServerSupervisor::new(
+        Box::new(launcher),
+        observer,
+        Duration::from_millis(/*millis*/ 5),
+    )
 }
 
-fn success_response() -> String {
-    r#"{
+fn success_response() -> Value {
+    json!({
         "id": 0,
         "result": {
             "userAgent": "codex-app-server/1.2.3",
@@ -156,8 +250,7 @@ fn success_response() -> String {
             "platformFamily": "windows",
             "platformOs": "windows"
         }
-    }"#
-    .to_string()
+    })
 }
 
 fn connected_status() -> RuntimeStatus {
@@ -173,6 +266,14 @@ fn startup_error_status() -> RuntimeStatus {
     RuntimeStatus::Error {
         message: STARTUP_ERROR_MESSAGE.to_string(),
         retryable: true,
+    }
+}
+
+fn wait_until(mut predicate: impl FnMut() -> bool) {
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
+    while !predicate() {
+        assert!(Instant::now() < deadline, "condition was not met in time");
+        thread::sleep(Duration::from_millis(/*millis*/ 5));
     }
 }
 
@@ -193,20 +294,32 @@ impl StatusObserver for RecordingObserver {
     }
 }
 
+#[derive(Default)]
+struct RecordingNotificationObserver {
+    notifications: Mutex<Vec<(String, Value)>>,
+}
+
+impl RecordingNotificationObserver {
+    fn notifications(&self) -> Vec<(String, Value)> {
+        self.notifications.lock().unwrap().clone()
+    }
+}
+
+impl NotificationObserver for RecordingNotificationObserver {
+    fn on_notification(&self, method: &str, params: &Value) {
+        self.notifications
+            .lock()
+            .unwrap()
+            .push((method.to_string(), params.clone()));
+    }
+}
+
 struct FakeLauncher {
-    attempts: VecDeque<Result<FakeChild, String>>,
+    attempts: VecDeque<Result<ProcessTransport, String>>,
 }
 
 impl FakeLauncher {
-    fn succeeding(response: String) -> Self {
-        Self::with_attempts([Ok(FakeChild::succeeding(response))])
-    }
-
-    fn failing(message: &str) -> Self {
-        Self::with_attempts([Err(message.to_string())])
-    }
-
-    fn with_attempts(attempts: impl IntoIterator<Item = Result<FakeChild, String>>) -> Self {
+    fn with_attempts(attempts: impl IntoIterator<Item = Result<ProcessTransport, String>>) -> Self {
         Self {
             attempts: attempts.into_iter().collect(),
         }
@@ -214,57 +327,74 @@ impl FakeLauncher {
 }
 
 impl ProcessLauncher for FakeLauncher {
-    fn launch(&mut self) -> Result<Box<dyn ProcessChild>, String> {
-        match self.attempts.pop_front() {
-            Some(Ok(child)) => Ok(Box::new(child)),
-            Some(Err(error)) => Err(error),
-            None => Err("unexpected launch attempt".to_string()),
-        }
+    fn launch(&mut self) -> Result<ProcessTransport, String> {
+        self.attempts
+            .pop_front()
+            .unwrap_or_else(|| Err("unexpected launch attempt".to_string()))
     }
 }
 
-struct FakeChild {
-    reads: VecDeque<Result<String, ChildReadError>>,
-    writes: Arc<Mutex<Vec<String>>>,
-    terminated: Arc<AtomicBool>,
-}
+struct FakeProcess;
 
-impl FakeChild {
-    fn succeeding(response: String) -> Self {
-        Self::new(
-            [Ok(response)],
-            Arc::new(Mutex::new(Vec::new())),
-            Arc::new(AtomicBool::new(false)),
-        )
+impl FakeProcess {
+    fn with_initialize_response() -> (ProcessTransport, FakeProcessHandle) {
+        let (transport, handle) = Self::without_events();
+        assert!(handle.send_json(success_response()));
+        (transport, handle)
     }
 
-    fn new(
-        reads: impl IntoIterator<Item = Result<String, ChildReadError>>,
-        writes: Arc<Mutex<Vec<String>>>,
-        terminated: Arc<AtomicBool>,
-    ) -> Self {
-        Self {
-            reads: reads.into_iter().collect(),
-            writes,
-            terminated,
-        }
+    fn without_events() -> (ProcessTransport, FakeProcessHandle) {
+        let (events, receiver) = mpsc::channel();
+        let control = Arc::new(FakeProcessControl {
+            writes: Mutex::new(Vec::new()),
+            terminate_calls: AtomicUsize::new(0),
+            events,
+        });
+        let handle = FakeProcessHandle {
+            control: control.clone(),
+        };
+        (ProcessTransport::new(control, receiver), handle)
     }
 }
 
-impl ProcessChild for FakeChild {
-    fn write(&mut self, message: &str) -> Result<(), String> {
+#[derive(Clone)]
+struct FakeProcessHandle {
+    control: Arc<FakeProcessControl>,
+}
+
+impl FakeProcessHandle {
+    fn writes(&self) -> Vec<String> {
+        self.control.writes.lock().unwrap().clone()
+    }
+
+    fn terminate_calls(&self) -> usize {
+        self.control.terminate_calls.load(Ordering::SeqCst)
+    }
+
+    fn send_json(&self, value: Value) -> bool {
+        self.send_event(TransportEvent::Stdout(format!("{value}\n").into_bytes()))
+    }
+
+    fn send_event(&self, event: TransportEvent) -> bool {
+        self.control.events.send(event).is_ok()
+    }
+}
+
+struct FakeProcessControl {
+    writes: Mutex<Vec<String>>,
+    terminate_calls: AtomicUsize,
+    events: Sender<TransportEvent>,
+}
+
+impl ProcessControl for FakeProcessControl {
+    fn write(&self, message: &str) -> Result<(), String> {
         self.writes.lock().unwrap().push(message.to_string());
         Ok(())
     }
 
-    fn receive_line(&mut self, _timeout: Duration) -> Result<String, ChildReadError> {
-        self.reads
-            .pop_front()
-            .unwrap_or(Err(ChildReadError::Timeout))
-    }
-
-    fn terminate(&mut self) -> Result<(), String> {
-        self.terminated.store(true, Ordering::SeqCst);
+    fn terminate(&self) -> Result<(), String> {
+        self.terminate_calls.fetch_add(1, Ordering::SeqCst);
+        let _ = self.events.send(TransportEvent::Terminated(Some(0)));
         Ok(())
     }
 }
