@@ -1,0 +1,9 @@
+test:
+    corepack pnpm test
+
+check:
+    corepack pnpm test
+    corepack pnpm build
+
+fmt:
+    corepack pnpm format:fix
