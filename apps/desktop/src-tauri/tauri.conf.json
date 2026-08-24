@@ -4,9 +4,9 @@
   "version": "0.1.0-alpha.0",
   "identifier": "com.rivloom.desktop",
   "build": {
-    "beforeDevCommand": "corepack pnpm dev",
+    "beforeDevCommand": "corepack pnpm prepare:app-server && corepack pnpm dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "corepack pnpm build",
+    "beforeBuildCommand": "corepack pnpm prepare:app-server && corepack pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -30,6 +30,7 @@
     }
   },
   "bundle": {
-    "active": true
+    "active": true,
+    "externalBin": ["binaries/codex-app-server"]
   }
 }

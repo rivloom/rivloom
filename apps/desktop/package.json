@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "prepare:app-server": "node scripts/prepare-app-server.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
