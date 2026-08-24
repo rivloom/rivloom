@@ -1,0 +1,170 @@
+.shell {
+  display: grid;
+  grid-template:
+    "topbar topbar" 56px
+    "sidebar main" minmax(0, 1fr)
+    "status status" 34px /
+    232px minmax(0, 1fr);
+  height: 100vh;
+  background: var(--color-bg);
+}
+
+.topBar {
+  z-index: 1;
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6) 0 var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-bg));
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brandMark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-surface);
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+}
+
+.brandName {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.brandName h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.brandName span,
+.workspace {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.workspace {
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.sidebar {
+  grid-area: sidebar;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-4);
+  border-right: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.activeNavItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-accent-hover);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.navMarker {
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--color-accent);
+  border-radius: 2px;
+  background: var(--color-surface);
+}
+
+.stageNote {
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.stageNote p {
+  margin: 0 0 var(--space-1);
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.stageNote h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.stageNote span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(32px, 5vw, 64px);
+}
+
+.statusBar {
+  z-index: 1;
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.statusBar > :first-child {
+  min-height: 22px;
+  padding-block: 2px;
+}
+
+.statusText {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 800px) {
+  .shell {
+    grid-template:
+      "topbar" 56px
+      "main" minmax(0, 1fr)
+      "status" 34px /
+      minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: none;
+  }
+}

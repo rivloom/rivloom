@@ -1,0 +1,77 @@
+.page {
+  width: min(100%, 900px);
+  margin: 0 auto;
+}
+
+.intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(240px, 0.75fr);
+  gap: clamp(32px, 6vw, 72px);
+  align-items: end;
+  margin-bottom: var(--space-8);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intro h2 {
+  max-width: 680px;
+  margin: 0;
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 690;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 680px;
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.privacyNote {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-top: 2px solid var(--color-accent);
+  background: var(--color-surface-muted);
+}
+
+.privacyMark {
+  color: var(--color-accent);
+  font-family: var(--font-code);
+  font-size: 20px;
+}
+
+.privacyNote strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.privacyNote p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 980px) {
+  .intro {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .privacyNote {
+    max-width: 520px;
+  }
+}
