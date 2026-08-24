@@ -2,6 +2,8 @@
 name = "rivloom-desktop"
 version = "0.1.0-alpha.0"
 description = "Rivloom desktop application"
+license = "Apache-2.0"
+repository = "https://github.com/rivloom/rivloom"
 edition = "2024"
 rust-version = "1.85"
 

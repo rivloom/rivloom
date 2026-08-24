@@ -14,7 +14,7 @@ Plan status: validated and ready for task-by-task execution.
 
 ## Preconditions
 
-- Work only in `C:\project\opencohive\.worktrees\desktop-shell`.
+- Work only in `<repo>\.worktrees\desktop-shell`.
 - Branch must be `feat/desktop-shell` at or after `5dd1d9249a`.
 - Do not modify `codex-core` or App Server protocol in this milestone.
 - Do not call a model or consume account quota.
@@ -385,8 +385,8 @@ The script should:
 4. Copy, never move, the source executable into `src-tauri/binaries` with Tauri's required suffix.
 5. Never commit the copied executable.
 
-For the first local run, use the already verified binary at
-`C:\project\opencohive\codex-rs\target\debug\codex-app-server.exe` through the environment override.
+For the first local run, use an already verified binary such as
+`<repo>\codex-rs\target\debug\codex-app-server.exe` through the environment override.
 Do not hardcode that developer-specific path in tracked files.
 
 ### Step 5.3: Add the process supervisor tests
