@@ -5,7 +5,7 @@
     "sidebar main" minmax(0, 1fr)
     "status status" 34px /
     232px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
   background: var(--color-bg);
 }
 
