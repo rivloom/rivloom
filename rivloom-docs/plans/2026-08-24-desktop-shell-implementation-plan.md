@@ -250,8 +250,12 @@ default size: 1180 x 760
 minimum size: 960 x 640
 decorations: true
 frontendDist: ../dist
-devUrl: http://localhost:5173
+devUrl: http://127.0.0.1:1420
 ```
+
+Use port `1420` for the Vite development server as well. The original `5173` choice can fall inside
+Windows excluded port ranges on development machines. Bind Vite explicitly to `127.0.0.1` so the
+Tauri readiness check does not depend on whether `localhost` resolves to IPv4 or IPv6 first.
 
 The default capability may expose only core window/event functionality and Rivloom's explicit Tauri
 commands. Do not expose `shell:allow-spawn` to the webview.

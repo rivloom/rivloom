@@ -1,3 +1,5 @@
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
 test:
     corepack pnpm test
 
@@ -7,3 +9,10 @@ check:
 
 fmt:
     corepack pnpm format:fix
+    cargo fmt --manifest-path src-tauri/Cargo.toml
+
+test-rust:
+    cargo test --manifest-path src-tauri/Cargo.toml
+
+check-rust:
+    cargo check --manifest-path src-tauri/Cargo.toml
