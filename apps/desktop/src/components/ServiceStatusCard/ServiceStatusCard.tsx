@@ -7,9 +7,14 @@ import styles from "./ServiceStatusCard.module.css";
 type ServiceStatusCardProps = {
   status: RuntimeStatus;
   onRetry?: () => void;
+  retrying?: boolean;
 };
 
-export function ServiceStatusCard({ status, onRetry }: ServiceStatusCardProps) {
+export function ServiceStatusCard({
+  status,
+  onRetry,
+  retrying = false,
+}: ServiceStatusCardProps) {
   const copy = getStatusCopy(status);
 
   return (
@@ -67,7 +72,8 @@ export function ServiceStatusCard({ status, onRetry }: ServiceStatusCardProps) {
               className={styles.retryButton}
               type="button"
               onClick={onRetry}
-              disabled={!status.retryable || !onRetry}
+              disabled={!status.retryable || !onRetry || retrying}
+              aria-busy={retrying || undefined}
             >
               {zhCN.service.error.retry}
             </button>

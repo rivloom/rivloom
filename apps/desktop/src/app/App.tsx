@@ -1,15 +1,15 @@
 import { AppShell } from "../components/AppShell/AppShell";
 import { ServiceStatusCard } from "../components/ServiceStatusCard/ServiceStatusCard";
 import { zhCN } from "../content/zh-CN";
-import type { RuntimeStatus } from "../types/runtime";
+import { useRuntimeStatus } from "../hooks/useRuntimeStatus";
 
 import styles from "./App.module.css";
 
-const initialRuntimeStatus: RuntimeStatus = { state: "starting" };
-
 export function App() {
+  const { retry, retrying, status } = useRuntimeStatus();
+
   return (
-    <AppShell runtimeStatus={initialRuntimeStatus}>
+    <AppShell runtimeStatus={status}>
       <div className={styles.page}>
         <section className={styles.intro} aria-labelledby="overview-title">
           <div>
@@ -29,7 +29,11 @@ export function App() {
           </aside>
         </section>
 
-        <ServiceStatusCard status={initialRuntimeStatus} />
+        <ServiceStatusCard
+          status={status}
+          onRetry={retry}
+          retrying={retrying}
+        />
       </div>
     </AppShell>
   );

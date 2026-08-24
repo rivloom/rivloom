@@ -72,4 +72,20 @@ describe("ServiceStatusCard", () => {
 
     expect(screen.getByRole("button", { name: "重试连接" })).toBeDisabled();
   });
+
+  it("disables repeated retry while a retry is pending", () => {
+    render(
+      <ServiceStatusCard
+        status={{
+          state: "error",
+          message: "核心服务暂时无法启动。",
+          retryable: true,
+        }}
+        onRetry={vi.fn()}
+        retrying
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "重试连接" })).toBeDisabled();
+  });
 });

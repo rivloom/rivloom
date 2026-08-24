@@ -8,6 +8,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use tauri::AppHandle;
+use tauri::Emitter;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::process::CommandEvent;
@@ -21,6 +22,7 @@ const STARTUP_ERROR_MESSAGE: &str = "核心服务暂时无法启动。";
 const MAX_DIAGNOSTIC_CHARS: usize = 512;
 const SIDECAR_NAME: &str = "codex-app-server";
 const INITIALIZATION_TIMEOUT: Duration = Duration::from_secs(10);
+const RUNTIME_STATUS_CHANGED_EVENT: &str = "runtime-status-changed";
 
 pub(super) trait ProcessLauncher: Send {
     fn launch(&mut self) -> Result<Box<dyn ProcessChild>, String>;
@@ -57,7 +59,7 @@ pub(crate) struct AppServerState {
 
 impl AppServerState {
     pub(crate) fn new(app_handle: AppHandle, codex_home: PathBuf) -> Self {
-        let status = Arc::new(RuntimeStatusStore::new());
+        let status = Arc::new(RuntimeStatusStore::new(app_handle.clone()));
         let observer: Arc<dyn StatusObserver> = status.clone();
         let launcher = Box::new(TauriProcessLauncher {
             app_handle,
@@ -227,12 +229,14 @@ fn log_diagnostic(context: &str, detail: &str) {
 }
 
 struct RuntimeStatusStore {
+    app_handle: AppHandle,
     current: Mutex<RuntimeStatus>,
 }
 
 impl RuntimeStatusStore {
-    fn new() -> Self {
+    fn new(app_handle: AppHandle) -> Self {
         Self {
+            app_handle,
             current: Mutex::new(RuntimeStatus::Stopped),
         }
     }
@@ -248,6 +252,13 @@ impl RuntimeStatusStore {
 impl StatusObserver for RuntimeStatusStore {
     fn on_status(&self, status: &RuntimeStatus) {
         *self.current.lock().unwrap_or_else(PoisonError::into_inner) = status.clone();
+
+        if let Err(error) = self
+            .app_handle
+            .emit_to("main", RUNTIME_STATUS_CHANGED_EVENT, status)
+        {
+            log_diagnostic("status event failed", &error.to_string());
+        }
 
         #[cfg(debug_assertions)]
         log_runtime_status(status);
