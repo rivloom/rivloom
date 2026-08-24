@@ -1,3 +1,4 @@
+mod app_server;
 pub mod runtime_status;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
