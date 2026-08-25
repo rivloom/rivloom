@@ -25,6 +25,7 @@ struct AccountServiceInner {
 struct AccountServiceState {
     connection: Option<Arc<dyn ConnectionControl>>,
     connection_revision: u64,
+    refresh_revision: u64,
     status: AccountStatus,
 }
 
@@ -35,6 +36,7 @@ impl AccountService {
                 state: Mutex::new(AccountServiceState {
                     connection: None,
                     connection_revision: 0,
+                    refresh_revision: 0,
                     status: AccountStatus::Checking,
                 }),
             }),
@@ -75,13 +77,18 @@ impl AccountService {
     }
 
     pub(crate) fn refresh(&self) -> AccountStatus {
-        let (connection, connection_revision) = {
-            let state = self
+        let (connection, connection_revision, refresh_revision) = {
+            let mut state = self
                 .inner
                 .state
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
-            (state.connection.clone(), state.connection_revision)
+            state.refresh_revision = state.refresh_revision.wrapping_add(1);
+            (
+                state.connection.clone(),
+                state.connection_revision,
+                state.refresh_revision,
+            )
         };
 
         let next_status = match connection {
@@ -107,7 +114,9 @@ impl AccountService {
             .state
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        if state.connection_revision == connection_revision {
+        if state.connection_revision == connection_revision
+            && state.refresh_revision == refresh_revision
+        {
             state.status = next_status;
         }
         state.status.clone()
@@ -122,12 +131,18 @@ struct AccountReadResponse {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AccountPayload {
-    #[serde(rename = "type")]
-    account_type: String,
-    email: Option<String>,
-    plan_type: Option<String>,
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum AccountPayload {
+    Chatgpt {
+        email: Value,
+        plan_type: String,
+    },
+    #[serde(other)]
+    Unsupported,
 }
 
 fn parse_account_status(result: Value) -> AccountStatus {
@@ -146,15 +161,16 @@ fn parse_account_status(result: Value) -> AccountStatus {
     let Ok(account) = serde_json::from_value::<AccountPayload>(response.account) else {
         return retryable_account_error();
     };
-    match account.account_type.as_str() {
-        "chatgpt" => match account.plan_type {
-            Some(plan_type) => AccountStatus::SignedIn {
-                email: account.email,
-                plan_type,
-            },
-            None => retryable_account_error(),
-        },
-        _ => unsupported_account_error(),
+    match account {
+        AccountPayload::Chatgpt { email, plan_type } => {
+            let email = match email {
+                Value::Null => None,
+                Value::String(email) => Some(email),
+                _ => return retryable_account_error(),
+            };
+            AccountStatus::SignedIn { email, plan_type }
+        }
+        AccountPayload::Unsupported => unsupported_account_error(),
     }
 }
 
