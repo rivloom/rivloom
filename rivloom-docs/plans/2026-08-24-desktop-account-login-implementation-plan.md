@@ -1,7 +1,7 @@
 # Rivloom Desktop Account Login Implementation Plan
 
-Plan status: A1.1, A1.2a-1, A1.2a-2a1 and A1.2a-2a2a merged and verified; A1.2a-2a2b is in
-progress.
+Plan status: A1.1 through A1.2a-2a2b merged and verified; A1.2a-2a3 implementation and verification
+are complete.
 
 > **For Codex:** Use `$executing-plans` task-by-task. After every task, run its verification, report
 > the result, and wait for user approval before continuing.
@@ -28,10 +28,12 @@ Vitest, Testing Library, CSS Modules, pnpm.
   baseline.
 - A1.2a-2a2a was merged through PR #11; use merge commit `14720acdfc` as the verified browser-start
   baseline.
-- For A1.2a-2a2b, work only in
-  `C:\project\opencohive\.worktrees\desktop-account-browser-lifecycle-concurrency-a12a2b` on
-  `codex/desktop-account-browser-lifecycle-concurrency-a12a2b`, created from `14720acdfc`.
-- Create fresh branches and worktrees for A1.2a-2a3, A1.2a-2b, A1.2b and A1.2c only
+- A1.2a-2a2b was merged through PR #12; use merge commit `ce55d853dd` as the verified lifecycle
+  concurrency baseline.
+- For A1.2a-2a3, work only in
+  `C:\project\opencohive\.worktrees\desktop-account-device-code-switching-a12a3` on
+  `codex/desktop-account-device-code-switching-a12a3`, created from `ce55d853dd`.
+- Create fresh branches and worktrees for A1.2a-2b, A1.2b and A1.2c only
   after the preceding PR is merged and the user explicitly approves the next setup step.
 - Follow `2026-08-24-desktop-account-login-design.md` and the repository `AGENTS.md`.
 - Do not modify `codex-rs`, App Server protocol, `CODEX_SANDBOX_*`, or upstream docs.
@@ -50,10 +52,10 @@ Vitest, Testing Library, CSS Modules, pnpm.
   narrow URL opener contract and official URL validation. Do not start login or open a browser.
 - **A1.2a-2a2a — Browser Start & Cleanup — complete:** Task 4B2a only. Deliver fixed browser starts,
   approved URL opening and recoverable sequential-attempt cleanup.
-- **A1.2a-2a2b — Lifecycle Concurrency:** Task 4B2b only. Deliver serialized concurrent starts,
-  stale-read and stale-connection protection, and defensive mismatched-response coverage.
-- **A1.2a-2a3 — Device Code & Switching:** Task 4B3 only. Deliver device-code starts, controlled
-  verification opening, retry recovery and browser/device switching.
+- **A1.2a-2a2b — Lifecycle Concurrency — complete:** Task 4B2b only. Deliver serialized concurrent
+  starts, stale-read and stale-connection protection, and defensive mismatched-response coverage.
+- **A1.2a-2a3 — Device Code & Switching — complete:** Task 4B3 only. Deliver device-code starts,
+  controlled verification opening, retry recovery and browser/device switching.
 - **A1.2a-2b — Completion & Account Actions:** Task 4B4 only. Deliver matching notifications,
   background refresh, explicit cancel and logout behavior.
 - **A1.2b — Account Bridge:** Tasks 5–6 only. Deliver six fixed Tauri commands, one normalized event,
@@ -252,6 +254,8 @@ Vitest, Testing Library, CSS Modules, pnpm.
 
 **Files:**
 
+- Create: `apps/desktop/src-tauri/src/account/service/device_code.rs`
+- Create: `apps/desktop/src-tauri/src/account/service/device_code_tests.rs`
 - Modify: `apps/desktop/src-tauri/src/account/service.rs`
 - Modify: `apps/desktop/src-tauri/src/account/service_tests.rs`
 
@@ -259,8 +263,10 @@ Vitest, Testing Library, CSS Modules, pnpm.
 
 1. Write failing tests for fixed device params, browser/device switching, controlled verification
    opening, failed-open retry recovery and temporary-value cleanup.
-2. Extend the active attempt with device verification URL and user code; never expose browser URLs or
-   login IDs. A successful retry after an opener error must restore the stored device-pending status.
+2. Extend the active attempt with device verification URL and user code in the dedicated
+   `service/device_code.rs` child module; never expose browser URLs or login IDs. A successful retry
+   after an opener error must restore the stored device-pending status. Keep `service.rs` below 500
+   lines and keep new test coverage out of the existing near-limit `service_tests.rs` module.
 3. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
    push or PR creation. Suggested commit: `feat(desktop): add ChatGPT device-code login`.
 

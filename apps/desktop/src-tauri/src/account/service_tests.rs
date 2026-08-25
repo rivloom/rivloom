@@ -545,7 +545,7 @@ impl Harness {
     }
 }
 
-fn browser_harness(
+pub(super) fn browser_harness(
     responses: Vec<Result<Value, ConnectionError>>,
     open_results: Vec<Result<(), ()>>,
 ) -> (AccountService, Arc<FakeConnection>, Arc<FakeUrlOpener>) {
@@ -557,25 +557,25 @@ fn browser_harness(
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct RecordedRequest {
-    method: String,
-    params: Value,
+pub(super) struct RecordedRequest {
+    pub(super) method: String,
+    pub(super) params: Value,
 }
 
-struct FakeConnection {
+pub(super) struct FakeConnection {
     responses: Mutex<VecDeque<Result<Value, ConnectionError>>>,
     requests: Mutex<Vec<RecordedRequest>>,
 }
 
 impl FakeConnection {
-    fn new(responses: Vec<Result<Value, ConnectionError>>) -> Self {
+    pub(super) fn new(responses: Vec<Result<Value, ConnectionError>>) -> Self {
         Self {
             responses: Mutex::new(responses.into()),
             requests: Mutex::new(Vec::new()),
         }
     }
 
-    fn requests(&self) -> Vec<RecordedRequest> {
+    pub(super) fn requests(&self) -> Vec<RecordedRequest> {
         self.requests
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -618,7 +618,7 @@ struct ControlledConnection {
     request_sender: mpsc::Sender<ControlledRequest>,
 }
 
-struct FakeUrlOpener {
+pub(super) struct FakeUrlOpener {
     results: Mutex<VecDeque<Result<(), ()>>>,
     opened_urls: Mutex<Vec<String>>,
 }
@@ -646,14 +646,14 @@ impl UrlOpener for BlockingUrlOpener {
 }
 
 impl FakeUrlOpener {
-    fn new(results: Vec<Result<(), ()>>) -> Self {
+    pub(super) fn new(results: Vec<Result<(), ()>>) -> Self {
         Self {
             results: Mutex::new(results.into()),
             opened_urls: Mutex::new(Vec::new()),
         }
     }
 
-    fn opened_urls(&self) -> Vec<String> {
+    pub(super) fn opened_urls(&self) -> Vec<String> {
         self.opened_urls
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -699,7 +699,7 @@ impl ConnectionControl for BlockingConnection {
     }
 }
 
-fn request(method: &str, params: Value) -> RecordedRequest {
+pub(super) fn request(method: &str, params: Value) -> RecordedRequest {
     RecordedRequest {
         method: method.to_string(),
         params,
@@ -713,7 +713,10 @@ fn signed_in_response() -> Result<Value, ConnectionError> {
     }))
 }
 
-fn browser_login_response(login_id: &str, auth_url: &str) -> Result<Value, ConnectionError> {
+pub(super) fn browser_login_response(
+    login_id: &str,
+    auth_url: &str,
+) -> Result<Value, ConnectionError> {
     Ok(json!({
         "type": "chatgpt",
         "loginId": login_id,
@@ -730,7 +733,7 @@ fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
     }))
 }
 
-fn browser_start_request() -> RecordedRequest {
+pub(super) fn browser_start_request() -> RecordedRequest {
     request(
         "account/login/start",
         json!({
@@ -762,14 +765,14 @@ fn unsupported_account_error() -> AccountStatus {
     }
 }
 
-fn browser_open_error() -> AccountStatus {
+pub(super) fn browser_open_error() -> AccountStatus {
     AccountStatus::Error {
         message: "无法打开 ChatGPT 登录页面，请尝试设备码登录。".to_string(),
         retryable: true,
     }
 }
 
-fn login_unavailable_error() -> AccountStatus {
+pub(super) fn login_unavailable_error() -> AccountStatus {
     AccountStatus::Error {
         message: "ChatGPT 登录暂时不可用，请重试。".to_string(),
         retryable: true,
