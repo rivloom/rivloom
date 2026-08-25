@@ -171,7 +171,7 @@ A1 不增加自动重启；继续使用第一阶段手动重试。
 | 通用长期连接 | A1 已需响应+通知，B 还需流式事件和审批 | 比账号专用读循环改动大，但避免 B 再推翻 |
 | Rust 打开浏览器 | React 不获得任意 URL/shell 能力 | 需可测试 opener 和严格 URL 兼容策略 |
 | App Server 管凭据 | 复用 OAuth、保存和刷新 | 账号能力受配套协议版本约束 |
-| A1.1 后按 A1.2a-1/A1.2a-2/A1.2b/A1.2c 交付 | 分开审查读取核心、登录生命周期、桥接和界面风险 | 四个独立 PR，按顺序合并后再开始下一段 |
+| A1.1 后按 A1.2a-1/A1.2a-2a1/A1.2a-2a2/A1.2a-2a3/A1.2a-2b/A1.2b/A1.2c 交付 | 分开审查读取核心、URL/协议安全、浏览器生命周期、设备码、通知与账号操作、桥接和界面风险 | 七个独立 PR，按顺序合并后再开始下一段 |
 
 ## 10. 测试与验收
 
@@ -187,7 +187,7 @@ A1 不增加自动重启；继续使用第一阶段手动重试。
 
 ```text
 apps/desktop/src/{components/AccountAccessCard,hooks,lib,types}
-apps/desktop/src-tauri/src/account/{mod,service,types}.rs
+apps/desktop/src-tauri/src/account/{login,mod,service,types}.rs
 apps/desktop/src-tauri/src/app_server/{connection,process,protocol,transport,wire}.rs
 ```
 

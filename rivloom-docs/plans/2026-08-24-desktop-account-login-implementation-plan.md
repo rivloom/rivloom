@@ -1,7 +1,7 @@
 # Rivloom Desktop Account Login Implementation Plan
 
-Plan status: A1.1 merged and verified; A1.2 four-PR delivery split approved after the A1.2a size
-checkpoint; A1.2a-1 in progress.
+Plan status: A1.1 and A1.2a-1 merged and verified; A1.2a-2 was split again after two size and review
+checkpoints; A1.2a-2a1 in progress.
 
 > **For Codex:** Use `$executing-plans` task-by-task. After every task, run its verification, report
 > the result, and wait for user approval before continuing.
@@ -22,11 +22,13 @@ Vitest, Testing Library, CSS Modules, pnpm.
 
 - A1.1 (Tasks 1–3) is already merged into `main` through `812c27ffa9`; treat it as the verified
   baseline and do not reimplement it.
-- For A1.2a-1, work only in
-  `C:\project\opencohive\.worktrees\desktop-account-login-core` on
-  `codex/desktop-account-login-core`, created from `812c27ffa9`.
-- Create fresh branches and worktrees for A1.2a-2, A1.2b and A1.2c only after the preceding PR is
-  merged and the user explicitly approves the next setup step.
+- A1.2a-1 was merged through PR #9; use merge commit `68b8bdf92f` as the verified account-read
+  baseline.
+- For A1.2a-2a1, work only in
+  `C:\project\opencohive\.worktrees\desktop-account-login-safety-a12a1` on
+  `codex/desktop-account-login-safety-a12a1`, created from `68b8bdf92f`.
+- Create fresh branches and worktrees for A1.2a-2a2, A1.2a-2a3, A1.2a-2b, A1.2b and A1.2c only
+  after the preceding PR is merged and the user explicitly approves the next setup step.
 - Follow `2026-08-24-desktop-account-login-design.md` and the repository `AGENTS.md`.
 - Do not modify `codex-rs`, App Server protocol, `CODEX_SANDBOX_*`, or upstream docs.
 - Do not create a thread, send a turn, call a model, inspect credentials, or log sensitive values.
@@ -40,15 +42,22 @@ Vitest, Testing Library, CSS Modules, pnpm.
 - **A1.2a-1 — Account Read Core:** Task 4A only. Deliver account types, crate-internal request access,
   connection state and `account/read` mapping. Do not add login attempts, URLs, notifications,
   Tauri commands, React code or UI.
-- **A1.2a-2 — Login Lifecycle:** Task 4B only. Deliver browser/device starts, attempt correlation,
-  official URL validation, matching notifications, cancel and logout behavior.
+- **A1.2a-2a1 — Login Safety Primitives:** Task 4B1 only. Deliver typed login/cancel parsing, the
+  narrow URL opener contract and official URL validation. Do not start login or open a browser.
+- **A1.2a-2a2 — Browser Login Lifecycle:** Task 4B2 only. Deliver serialized browser starts,
+  attempt correlation, stale-result protection and recoverable cleanup.
+- **A1.2a-2a3 — Device Code & Switching:** Task 4B3 only. Deliver device-code starts, controlled
+  verification opening, retry recovery and browser/device switching.
+- **A1.2a-2b — Completion & Account Actions:** Task 4B4 only. Deliver matching notifications,
+  background refresh, explicit cancel and logout behavior.
 - **A1.2b — Account Bridge:** Tasks 5–6 only. Deliver six fixed Tauri commands, one normalized event,
   the typed React bridge and race-safe Hook.
 - **A1.2c — Account UI:** Tasks 7–8 only. Deliver all six UI states, device-code interactions,
   accessible logout confirmation and final verification evidence.
 - Each A1.2 checkpoint is a separate reviewable PR. Stop for local verification and user approval
   before every commit, push, PR creation and merge.
-- If any non-mechanical PR approaches 800 changed lines, stop and propose a smaller coherent split.
+- Keep complex logic changes below 500 changed lines and every non-mechanical PR below 800; stop and
+  propose a smaller coherent split before crossing either review threshold.
 
 ## Completed A1.1 baseline — do not re-execute
 
@@ -171,34 +180,94 @@ Vitest, Testing Library, CSS Modules, pnpm.
 11. Stop for user review. After explicit approval, commit
     `feat(desktop): read ChatGPT account state`. Do not push or create a PR yet.
 
-## A1.2a-2 — Login Lifecycle (future branch after A1.2a-1 merges)
+## A1.2a-2a1 — Login Safety Primitives
 
-## Task 4B: Implement managed login lifecycle
+## Task 4B1: Add typed login and URL safety primitives
+
+**Files:**
+
+- Create: `apps/desktop/src-tauri/src/account/login.rs`
+- Create: `apps/desktop/src-tauri/src/account/login_tests.rs`
+- Modify: `apps/desktop/src-tauri/src/account/mod.rs`
+
+### Steps
+
+1. Write failing sibling tests for browser/device response parsing, unknown/malformed payloads,
+   cancel confirmations and official URL validation.
+2. Define a documented `UrlOpener` trait with one object-safe method. Implement no opener and grant no
+   Tauri capability in this checkpoint.
+3. Parse only the expected camelCase response fields. Unknown variants must discard their payload;
+   malformed values must become `None` without logging or returning raw data.
+4. Allow HTTPS on `chatgpt.com`, `openai.com` and real subdomains only; reject credentials,
+   non-default ports and lookalike suffixes.
+5. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
+   push or PR creation. Suggested commit: `feat(desktop): validate ChatGPT login URLs`.
+
+## A1.2a-2a2 — Browser Login Lifecycle (future branch after A1.2a-2a1 merges)
+
+## Task 4B2: Start browser login safely
+
+**Files:**
+
+- Modify: `apps/desktop/src-tauri/src/account/service.rs`
+- Modify: `apps/desktop/src-tauri/src/account/service_tests.rs`
+
+### Steps
+
+1. Write failing tests for fixed browser params, serialized concurrent starts, prior-attempt
+   cancellation, read/start and reconnect/start races, invalid URLs, opener failures and failed
+   cleanup retention.
+2. Implement one active browser attempt and a serialized login-operation boundary. Invalidate stale
+   reads when installing status and guard every late result with its connection revision.
+3. Keep `authUrl` in Rust, pass only a parsed approved URL to `UrlOpener`, and preserve `loginId`
+   internally when cancellation is not confirmed so a later retry can clean it up.
+4. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
+   push or PR creation. Suggested commit: `feat(desktop): start ChatGPT browser login safely`.
+
+## A1.2a-2a3 — Device Code & Switching (future branch after A1.2a-2a2 merges)
+
+## Task 4B3: Add device-code login and switching
+
+**Files:**
+
+- Modify: `apps/desktop/src-tauri/src/account/service.rs`
+- Modify: `apps/desktop/src-tauri/src/account/service_tests.rs`
+
+### Steps
+
+1. Write failing tests for fixed device params, browser/device switching, controlled verification
+   opening, failed-open retry recovery and temporary-value cleanup.
+2. Extend the active attempt with device verification URL and user code; never expose browser URLs or
+   login IDs. A successful retry after an opener error must restore the stored device-pending status.
+3. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
+   push or PR creation. Suggested commit: `feat(desktop): add ChatGPT device-code login`.
+
+## A1.2a-2b — Completion & Account Actions (future branch after A1.2a-2a3 merges)
+
+## Task 4B4: Complete the managed login lifecycle
 
 **Files:**
 
 - Modify: `apps/desktop/src-tauri/src/account/service.rs`
 - Modify: `apps/desktop/src-tauri/src/account/service_tests.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/connection.rs`
+- Modify: `apps/desktop/src-tauri/src/app_server/connection_request_tests.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/mod.rs`
 
 ### Steps
 
-1. With fake URL opener and manual task spawner implementations, write failing tests for browser and
-   device starts, fixed params, prior-attempt cancellation, official HTTPS URL checks, matching/stale
-   completion notifications, cancel cleanup and logout failure preserving signed-in.
+1. With a manual task spawner, write failing tests for matching/stale completion notifications,
+   cancel cleanup, parameterless logout and logout failure preserving signed-in state.
 2. Promote `NotificationObserver` to crate-internal visibility without making the connection module
-   public. Define documented `UrlOpener` and `TaskSpawner` traits with narrow object-safe methods.
-3. Implement one active login attempt, browser/device response parsing and Rust-owned temporary URL
-   data. Allow HTTPS on `chatgpt.com`, `openai.com` and real subdomains only; reject credentials,
-   non-default ports and lookalike suffixes.
-4. Notification callbacks must return promptly and schedule background `account/read`; they must
-   never synchronously wait for an RPC on the App Server reader thread. Ignore stale login IDs.
-5. Re-read backend truth after successful completion, cancel and logout. Clear temporary values on
+   public. Define a documented `TaskSpawner` trait with a narrow object-safe method.
+3. Notification callbacks must return promptly and schedule deduplicated background `account/read`;
+   they must never synchronously wait for an RPC on the App Server reader thread. Ignore stale login
+   IDs.
+4. Re-read backend truth after successful completion, cancel and logout. Clear temporary values on
    terminal paths; preserve signed-in state when logout fails. Never log URL, login ID, code or raw
    payloads.
-6. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
-   push or PR creation. Suggested commit: `feat(desktop): manage ChatGPT login lifecycle`.
+5. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
+   push or PR creation. Suggested commit: `feat(desktop): complete ChatGPT login lifecycle`.
 
 ## A1.2b — Account Bridge (future branch after A1.2a merges)
 
