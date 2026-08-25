@@ -79,8 +79,8 @@ transport，不篡改真实账号文件。
 - capability 无 shell/open/spawn/execute；Rust 只允许合规 HTTPS 官方认证地址。
 - DTO、日志、错误和 Git 中无 Token、完整 URL、loginId、设备码或原始账号响应。
 - 单行、pending、RPC 和诊断都有硬上限；断开/退出清理请求、尝试和子进程。
-- `git diff 584ba0a7c4 -- codex-rs` 为空；没有二进制、target、dist、截图、日志或账号文件。
-- 新模块低于 500 行；接近 800 行时在 A1.1 提议拆分。
+- `git diff 812c27ffa9 -- codex-rs` 为空；没有二进制、target、dist、截图、日志或账号文件。
+- 新模块低于 500 行；任一 A1.2 PR 接近 800 行时先提议更小的连贯拆分。
 - `LICENSE` 继续是 Apache-2.0，没有不兼容资产或依赖。
 
 ## 7. 最终记录
