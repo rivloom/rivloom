@@ -25,7 +25,7 @@ const MAX_PENDING_REQUESTS: usize = 64;
 ///
 /// Implementations must correlate each response with its caller and return only
 /// sanitized errors that are safe to pass into service-level state mapping.
-pub(super) trait ConnectionControl: Send + Sync {
+pub(crate) trait ConnectionControl: Send + Sync {
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError>;
 }
 
@@ -38,7 +38,7 @@ pub(super) trait NotificationObserver: Send + Sync {
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
-pub(super) enum ConnectionError {
+pub(crate) enum ConnectionError {
     #[error("failed to serialize an App Server protocol message")]
     Serialize,
     #[error("failed to send a request to App Server")]

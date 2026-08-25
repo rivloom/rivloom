@@ -1,3 +1,4 @@
+mod account;
 mod app_server;
 pub mod runtime_status;
 
