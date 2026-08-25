@@ -1,7 +1,7 @@
 # Rivloom Desktop Account Login Implementation Plan
 
-Plan status: A1.1, A1.2a-1 and A1.2a-2a1 merged and verified; A1.2a-2a2 was split after local
-review, and A1.2a-2a2a is in progress.
+Plan status: A1.1, A1.2a-1, A1.2a-2a1 and A1.2a-2a2a merged and verified; A1.2a-2a2b is in
+progress.
 
 > **For Codex:** Use `$executing-plans` task-by-task. After every task, run its verification, report
 > the result, and wait for user approval before continuing.
@@ -26,10 +26,12 @@ Vitest, Testing Library, CSS Modules, pnpm.
   baseline.
 - A1.2a-2a1 was merged through PR #10; use merge commit `ec57d275c5` as the verified login-safety
   baseline.
-- For A1.2a-2a2a, work only in
-  `C:\project\opencohive\.worktrees\desktop-account-browser-start-cleanup-a12a2a` on
-  `codex/desktop-account-browser-start-cleanup-a12a2a`, created from `ec57d275c5`.
-- Create fresh branches and worktrees for A1.2a-2a2b, A1.2a-2a3, A1.2a-2b, A1.2b and A1.2c only
+- A1.2a-2a2a was merged through PR #11; use merge commit `14720acdfc` as the verified browser-start
+  baseline.
+- For A1.2a-2a2b, work only in
+  `C:\project\opencohive\.worktrees\desktop-account-browser-lifecycle-concurrency-a12a2b` on
+  `codex/desktop-account-browser-lifecycle-concurrency-a12a2b`, created from `14720acdfc`.
+- Create fresh branches and worktrees for A1.2a-2a3, A1.2a-2b, A1.2b and A1.2c only
   after the preceding PR is merged and the user explicitly approves the next setup step.
 - Follow `2026-08-24-desktop-account-login-design.md` and the repository `AGENTS.md`.
 - Do not modify `codex-rs`, App Server protocol, `CODEX_SANDBOX_*`, or upstream docs.
@@ -46,7 +48,7 @@ Vitest, Testing Library, CSS Modules, pnpm.
   Tauri commands, React code or UI.
 - **A1.2a-2a1 — Login Safety Primitives:** Task 4B1 only. Deliver typed login/cancel parsing, the
   narrow URL opener contract and official URL validation. Do not start login or open a browser.
-- **A1.2a-2a2a — Browser Start & Cleanup:** Task 4B2a only. Deliver fixed browser starts,
+- **A1.2a-2a2a — Browser Start & Cleanup — complete:** Task 4B2a only. Deliver fixed browser starts,
   approved URL opening and recoverable sequential-attempt cleanup.
 - **A1.2a-2a2b — Lifecycle Concurrency:** Task 4B2b only. Deliver serialized concurrent starts,
   stale-read and stale-connection protection, and defensive mismatched-response coverage.
@@ -226,7 +228,7 @@ Vitest, Testing Library, CSS Modules, pnpm.
 4. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
    push or PR creation. Suggested commit: `feat(desktop): start ChatGPT browser login safely`.
 
-## A1.2a-2a2b — Lifecycle Concurrency (future branch after A1.2a-2a2a merges)
+## A1.2a-2a2b — Lifecycle Concurrency
 
 ## Task 4B2b: Harden browser login concurrency
 
