@@ -1,7 +1,7 @@
 # Rivloom Desktop Account Login Implementation Plan
 
-Plan status: A1.1 and A1.2a-1 merged and verified; A1.2a-2 was split again after two size and review
-checkpoints; A1.2a-2a1 in progress.
+Plan status: A1.1, A1.2a-1 and A1.2a-2a1 merged and verified; A1.2a-2a2 was split after local
+review, and A1.2a-2a2a is in progress.
 
 > **For Codex:** Use `$executing-plans` task-by-task. After every task, run its verification, report
 > the result, and wait for user approval before continuing.
@@ -24,10 +24,12 @@ Vitest, Testing Library, CSS Modules, pnpm.
   baseline and do not reimplement it.
 - A1.2a-1 was merged through PR #9; use merge commit `68b8bdf92f` as the verified account-read
   baseline.
-- For A1.2a-2a1, work only in
-  `C:\project\opencohive\.worktrees\desktop-account-login-safety-a12a1` on
-  `codex/desktop-account-login-safety-a12a1`, created from `68b8bdf92f`.
-- Create fresh branches and worktrees for A1.2a-2a2, A1.2a-2a3, A1.2a-2b, A1.2b and A1.2c only
+- A1.2a-2a1 was merged through PR #10; use merge commit `ec57d275c5` as the verified login-safety
+  baseline.
+- For A1.2a-2a2a, work only in
+  `C:\project\opencohive\.worktrees\desktop-account-browser-start-cleanup-a12a2a` on
+  `codex/desktop-account-browser-start-cleanup-a12a2a`, created from `ec57d275c5`.
+- Create fresh branches and worktrees for A1.2a-2a2b, A1.2a-2a3, A1.2a-2b, A1.2b and A1.2c only
   after the preceding PR is merged and the user explicitly approves the next setup step.
 - Follow `2026-08-24-desktop-account-login-design.md` and the repository `AGENTS.md`.
 - Do not modify `codex-rs`, App Server protocol, `CODEX_SANDBOX_*`, or upstream docs.
@@ -44,8 +46,10 @@ Vitest, Testing Library, CSS Modules, pnpm.
   Tauri commands, React code or UI.
 - **A1.2a-2a1 — Login Safety Primitives:** Task 4B1 only. Deliver typed login/cancel parsing, the
   narrow URL opener contract and official URL validation. Do not start login or open a browser.
-- **A1.2a-2a2 — Browser Login Lifecycle:** Task 4B2 only. Deliver serialized browser starts,
-  attempt correlation, stale-result protection and recoverable cleanup.
+- **A1.2a-2a2a — Browser Start & Cleanup:** Task 4B2a only. Deliver fixed browser starts,
+  approved URL opening and recoverable sequential-attempt cleanup.
+- **A1.2a-2a2b — Lifecycle Concurrency:** Task 4B2b only. Deliver serialized concurrent starts,
+  stale-read and stale-connection protection, and defensive mismatched-response coverage.
 - **A1.2a-2a3 — Device Code & Switching:** Task 4B3 only. Deliver device-code starts, controlled
   verification opening, retry recovery and browser/device switching.
 - **A1.2a-2b — Completion & Account Actions:** Task 4B4 only. Deliver matching notifications,
@@ -203,9 +207,9 @@ Vitest, Testing Library, CSS Modules, pnpm.
 5. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
    push or PR creation. Suggested commit: `feat(desktop): validate ChatGPT login URLs`.
 
-## A1.2a-2a2 — Browser Login Lifecycle (future branch after A1.2a-2a1 merges)
+## A1.2a-2a2a — Browser Start & Cleanup
 
-## Task 4B2: Start browser login safely
+## Task 4B2a: Start and clean up browser login safely
 
 **Files:**
 
@@ -214,17 +218,33 @@ Vitest, Testing Library, CSS Modules, pnpm.
 
 ### Steps
 
-1. Write failing tests for fixed browser params, serialized concurrent starts, prior-attempt
-   cancellation, read/start and reconnect/start races, invalid URLs, opener failures and failed
-   cleanup retention.
-2. Implement one active browser attempt and a serialized login-operation boundary. Invalidate stale
-   reads when installing status and guard every late result with its connection revision.
+1. Write failing tests for fixed browser params, invalid URLs, opener failures, failed cleanup
+   retention and unavailable or malformed start responses.
+2. Implement one active browser attempt and recoverable sequential-attempt cleanup.
 3. Keep `authUrl` in Rust, pass only a parsed approved URL to `UrlOpener`, and preserve `loginId`
    internally when cancellation is not confirmed so a later retry can clean it up.
 4. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
    push or PR creation. Suggested commit: `feat(desktop): start ChatGPT browser login safely`.
 
-## A1.2a-2a3 — Device Code & Switching (future branch after A1.2a-2a2 merges)
+## A1.2a-2a2b — Lifecycle Concurrency (future branch after A1.2a-2a2a merges)
+
+## Task 4B2b: Harden browser login concurrency
+
+**Files:**
+
+- Modify: `apps/desktop/src-tauri/src/account/service.rs`
+- Modify: `apps/desktop/src-tauri/src/account/service_tests.rs`
+
+### Steps
+
+1. Write failing tests for serialized concurrent starts, read/start and reconnect/start races, and
+   defensive device-response cleanup.
+2. Invalidate stale reads when installing status and guard every late result with its connection
+   revision. Keep concurrent browser starts behind one serialized login-operation boundary.
+3. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
+   push or PR creation. Suggested commit: `feat(desktop): harden browser login concurrency`.
+
+## A1.2a-2a3 — Device Code & Switching (future branch after A1.2a-2a2b merges)
 
 ## Task 4B3: Add device-code login and switching
 
