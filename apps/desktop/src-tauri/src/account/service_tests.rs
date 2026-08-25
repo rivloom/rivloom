@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::sync::TryLockError;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -216,6 +217,146 @@ fn an_older_read_on_the_same_connection_cannot_overwrite_a_newer_result() {
 }
 
 #[test]
+fn a_read_started_before_browser_login_cannot_overwrite_pending() {
+    let (service, _, request_receiver) = controlled_browser_service();
+    let read_service = service.clone();
+    let read = spawn_status_task(move || read_service.refresh());
+    let read_request = next_request(&request_receiver, "account/read should arrive");
+    let login = spawn_browser_login(&service);
+    next_request(&request_receiver, "account/login/start should arrive").respond(
+        browser_start_request(),
+        browser_login_response("browser-login", "https://auth.openai.com/oauth"),
+    );
+    assert_eq!(
+        login.wait("browser login should finish"),
+        AccountStatus::BrowserPending
+    );
+    read_request.respond(
+        request("account/read", json!({ "refreshToken": false })),
+        Ok(json!({
+            "account": null,
+            "requiresOpenaiAuth": true,
+        })),
+    );
+    assert_eq!(
+        (read.wait("account/read should finish"), service.status()),
+        (AccountStatus::BrowserPending, AccountStatus::BrowserPending)
+    );
+}
+
+#[test]
+fn a_read_started_after_browser_login_cannot_overwrite_pending() {
+    let (service, _, _) = browser_harness(
+        vec![
+            browser_login_response("browser-login", "https://auth.openai.com/oauth"),
+            Ok(json!({
+                "account": null,
+                "requiresOpenaiAuth": true,
+            })),
+        ],
+        vec![],
+    );
+
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        (service.refresh(), service.status()),
+        (AccountStatus::BrowserPending, AccountStatus::BrowserPending)
+    );
+}
+
+#[test]
+fn browser_login_holds_the_serialization_gate_until_the_attempt_is_installed() {
+    let (service, opener, request_receiver) = controlled_browser_service();
+    let login = spawn_browser_login(&service);
+    let request = next_request(&request_receiver, "login request should arrive");
+    assert!(matches!(
+        service.inner.login_operation.try_lock(),
+        Err(TryLockError::WouldBlock)
+    ));
+    request.respond(
+        browser_start_request(),
+        browser_login_response("browser-login", "https://auth.openai.com/oauth"),
+    );
+    assert_eq!(
+        (
+            login.wait("browser login should finish"),
+            opener.opened_urls()
+        ),
+        (
+            AccountStatus::BrowserPending,
+            vec!["https://auth.openai.com/oauth".to_string()],
+        )
+    );
+}
+
+#[test]
+fn a_valid_login_on_an_old_connection_is_canceled_without_opening() {
+    let (service, opener, request_receiver) = controlled_browser_service();
+    let old_login = spawn_browser_login(&service);
+    let old_request = next_request(&request_receiver, "old login should reach the connection");
+    service.connect(Arc::new(FakeConnection::new(vec![Ok(json!({
+        "account": null,
+        "requiresOpenaiAuth": true,
+    }))])));
+    assert_eq!(service.refresh(), AccountStatus::SignedOut);
+    old_request.respond(
+        browser_start_request(),
+        browser_login_response("old-login", "https://auth.openai.com/old"),
+    );
+    next_request(&request_receiver, "old login should be canceled").respond(
+        request("account/login/cancel", json!({ "loginId": "old-login" })),
+        Ok(json!({ "status": "canceled" })),
+    );
+    assert_eq!(
+        (
+            old_login.wait("old login cleanup should finish"),
+            service.status(),
+            opener.opened_urls()
+        ),
+        (
+            AccountStatus::SignedOut,
+            AccountStatus::SignedOut,
+            Vec::<String>::new()
+        )
+    );
+}
+
+#[test]
+fn browser_open_holds_the_connection_transition_gate_until_it_finishes() {
+    let (entered_sender, entered_receiver) = mpsc::channel();
+    let (release_sender, release_receiver) = mpsc::channel();
+    let service = AccountService::with_url_opener(Arc::new(BlockingUrlOpener {
+        entered_sender: Mutex::new(Some(entered_sender)),
+        release_receiver: Mutex::new(release_receiver),
+    }));
+    service.connect(Arc::new(FakeConnection::new(vec![browser_login_response(
+        "browser-login",
+        "https://auth.openai.com/oauth",
+    )])));
+    let login = spawn_browser_login(&service);
+    entered_receiver
+        .recv_timeout(Duration::from_secs(/*secs*/ 1))
+        .expect("browser opener should be reached");
+
+    assert!(matches!(
+        service.inner.browser_open_operation.try_lock(),
+        Err(TryLockError::WouldBlock)
+    ));
+    release_sender.send(()).unwrap();
+    let login_status = login.wait("browser login should finish after release");
+    let reconnect_status = service.connect(Arc::new(FakeConnection::new(vec![])));
+
+    assert_eq!(
+        (login_status, reconnect_status, service.status()),
+        (
+            AccountStatus::BrowserPending,
+            AccountStatus::Checking,
+            AccountStatus::Checking
+        )
+    );
+}
+
+#[test]
 fn failed_browser_cleanup_retains_the_attempt_for_the_next_retry() {
     let (service, connection, _) = browser_harness(
         vec![
@@ -291,6 +432,100 @@ fn browser_start_failures_are_retryable_and_do_not_open_or_leak() {
 
     let service = AccountService::new();
     assert_eq!(service.start_browser_login(), login_unavailable_error());
+}
+
+#[test]
+fn unexpected_device_responses_are_canceled_and_retained_until_cleanup() {
+    let (service, connection, opener) = browser_harness(
+        vec![
+            device_login_response("first-device"),
+            Ok(json!({ "status": "canceled" })),
+            device_login_response("second-device"),
+            Err(ConnectionError::Timeout),
+            Ok(json!({ "status": "canceled" })),
+            browser_login_response("browser-login", "https://auth.openai.com/oauth"),
+        ],
+        vec![],
+    );
+
+    assert_eq!(service.start_browser_login(), login_unavailable_error());
+    assert_eq!(service.start_browser_login(), login_unavailable_error());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        (
+            connection.requests(),
+            opener.opened_urls(),
+            service.status()
+        ),
+        (
+            vec![
+                browser_start_request(),
+                request("account/login/cancel", json!({ "loginId": "first-device" }),),
+                browser_start_request(),
+                request(
+                    "account/login/cancel",
+                    json!({ "loginId": "second-device" }),
+                ),
+                request(
+                    "account/login/cancel",
+                    json!({ "loginId": "second-device" }),
+                ),
+                browser_start_request(),
+            ],
+            vec!["https://auth.openai.com/oauth".to_string()],
+            AccountStatus::BrowserPending,
+        )
+    );
+}
+
+fn controlled_browser_service() -> (
+    AccountService,
+    Arc<FakeUrlOpener>,
+    mpsc::Receiver<ControlledRequest>,
+) {
+    let opener = Arc::new(FakeUrlOpener::new(vec![]));
+    let service = AccountService::with_url_opener(opener.clone());
+    let (request_sender, request_receiver) = mpsc::channel();
+    service.connect(Arc::new(ControlledConnection { request_sender }));
+    (service, opener, request_receiver)
+}
+
+fn spawn_browser_login(service: &AccountService) -> StatusTask {
+    let service = service.clone();
+    spawn_status_task(move || service.start_browser_login())
+}
+
+fn spawn_status_task(operation: impl FnOnce() -> AccountStatus + Send + 'static) -> StatusTask {
+    let (result_sender, result_receiver) = mpsc::channel();
+    let thread = thread::spawn(move || {
+        let _ = result_sender.send(operation());
+    });
+    StatusTask {
+        result_receiver,
+        thread,
+    }
+}
+
+fn next_request(receiver: &mpsc::Receiver<ControlledRequest>, message: &str) -> ControlledRequest {
+    receiver
+        .recv_timeout(Duration::from_secs(/*secs*/ 1))
+        .unwrap_or_else(|error| panic!("{message}: {error}"))
+}
+
+struct StatusTask {
+    result_receiver: mpsc::Receiver<AccountStatus>,
+    thread: thread::JoinHandle<()>,
+}
+
+impl StatusTask {
+    fn wait(self, message: &str) -> AccountStatus {
+        let status = self
+            .result_receiver
+            .recv_timeout(Duration::from_secs(/*secs*/ 1))
+            .unwrap_or_else(|error| panic!("{message}: {error}"));
+        self.thread.join().unwrap();
+        status
+    }
 }
 
 struct Harness {
@@ -372,6 +607,13 @@ struct ControlledRequest {
     response_sender: mpsc::Sender<Result<Value, ConnectionError>>,
 }
 
+impl ControlledRequest {
+    fn respond(self, expected: RecordedRequest, response: Result<Value, ConnectionError>) {
+        assert_eq!(self.request, expected);
+        self.response_sender.send(response).unwrap();
+    }
+}
+
 struct ControlledConnection {
     request_sender: mpsc::Sender<ControlledRequest>,
 }
@@ -379,6 +621,28 @@ struct ControlledConnection {
 struct FakeUrlOpener {
     results: Mutex<VecDeque<Result<(), ()>>>,
     opened_urls: Mutex<Vec<String>>,
+}
+
+struct BlockingUrlOpener {
+    entered_sender: Mutex<Option<mpsc::Sender<()>>>,
+    release_receiver: Mutex<mpsc::Receiver<()>>,
+}
+
+impl UrlOpener for BlockingUrlOpener {
+    fn open(&self, _url: &Url) -> Result<(), ()> {
+        self.entered_sender
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+            .expect("opener should be called once")
+            .send(())
+            .unwrap();
+        self.release_receiver
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .recv_timeout(Duration::from_secs(/*secs*/ 2))
+            .map_err(|_| ())
+    }
 }
 
 impl FakeUrlOpener {
@@ -454,6 +718,15 @@ fn browser_login_response(login_id: &str, auth_url: &str) -> Result<Value, Conne
         "type": "chatgpt",
         "loginId": login_id,
         "authUrl": auth_url,
+    }))
+}
+
+fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
+    Ok(json!({
+        "type": "chatgptDeviceCode",
+        "loginId": login_id,
+        "verificationUrl": "https://auth.openai.com/device",
+        "userCode": "SAFE-CODE",
     }))
 }
 

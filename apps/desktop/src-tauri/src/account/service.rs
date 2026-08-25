@@ -27,6 +27,8 @@ pub(crate) struct AccountService {
 }
 
 struct AccountServiceInner {
+    browser_open_operation: Mutex<()>,
+    login_operation: Mutex<()>,
     state: Mutex<AccountServiceState>,
     url_opener: Arc<dyn UrlOpener>,
 }
@@ -60,6 +62,8 @@ impl AccountService {
     pub(crate) fn with_url_opener(url_opener: Arc<dyn UrlOpener>) -> Self {
         Self {
             inner: Arc::new(AccountServiceInner {
+                browser_open_operation: Mutex::new(()),
+                login_operation: Mutex::new(()),
                 state: Mutex::new(AccountServiceState {
                     connection: None,
                     connection_revision: 0,
@@ -73,6 +77,11 @@ impl AccountService {
     }
 
     pub(crate) fn connect(&self, connection: Arc<dyn ConnectionControl>) -> AccountStatus {
+        let _browser_open = self
+            .inner
+            .browser_open_operation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         let mut state = self
             .inner
             .state
@@ -86,6 +95,11 @@ impl AccountService {
     }
 
     pub(crate) fn disconnect(&self) -> AccountStatus {
+        let _browser_open = self
+            .inner
+            .browser_open_operation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         let mut state = self
             .inner
             .state
@@ -147,6 +161,7 @@ impl AccountService {
             .unwrap_or_else(PoisonError::into_inner);
         if state.connection_revision == connection_revision
             && state.refresh_revision == refresh_revision
+            && state.login_attempt.is_none()
         {
             state.status = next_status;
         }
@@ -154,8 +169,13 @@ impl AccountService {
     }
 
     pub(crate) fn start_browser_login(&self) -> AccountStatus {
-        let connection = match self.prepare_login() {
-            Ok(connection) => connection,
+        let _operation = self
+            .inner
+            .login_operation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let (connection, connection_revision) = match self.prepare_login() {
+            Ok(prepared) => prepared,
             Err(status) => return status,
         };
         let response = connection
@@ -171,25 +191,64 @@ impl AccountService {
             .and_then(parse_login_response);
         let (login_id, auth_url) = match response {
             Some(LoginStartResponse::Chatgpt { login_id, auth_url }) => (login_id, auth_url),
+            Some(LoginStartResponse::ChatgptDeviceCode { login_id, .. })
+                if !login_id.is_empty() =>
+            {
+                return self.cancel_started_attempt(
+                    &connection,
+                    connection_revision,
+                    LoginAttempt { login_id },
+                    login_unavailable_error(),
+                );
+            }
             Some(LoginStartResponse::ChatgptDeviceCode { .. })
             | Some(LoginStartResponse::Unsupported)
-            | None => return self.set_status(login_unavailable_error()),
+            | None => {
+                return self
+                    .set_status_for_connection(connection_revision, login_unavailable_error());
+            }
         };
         if login_id.is_empty() {
-            return self.set_status(login_unavailable_error());
+            return self.set_status_for_connection(connection_revision, login_unavailable_error());
         }
         let attempt = LoginAttempt { login_id };
         let Some(auth_url) = parse_official_auth_url(&auth_url) else {
-            return self.cancel_started_attempt(&connection, attempt, browser_open_error());
+            return self.cancel_started_attempt(
+                &connection,
+                connection_revision,
+                attempt,
+                browser_open_error(),
+            );
         };
-        self.install_attempt(attempt.clone(), AccountStatus::BrowserPending);
-        if self.inner.url_opener.open(&auth_url).is_err() {
-            return self.cancel_started_attempt(&connection, attempt, browser_open_error());
+        let browser_open = self
+            .inner
+            .browser_open_operation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if !self.install_attempt(
+            connection_revision,
+            attempt.clone(),
+            AccountStatus::BrowserPending,
+        ) {
+            let status = self.status();
+            drop(browser_open);
+            return self.cancel_started_attempt(&connection, connection_revision, attempt, status);
         }
-        self.status()
+        if self.inner.url_opener.open(&auth_url).is_err() {
+            drop(browser_open);
+            return self.cancel_started_attempt(
+                &connection,
+                connection_revision,
+                attempt,
+                browser_open_error(),
+            );
+        }
+        let status = self.status();
+        drop(browser_open);
+        status
     }
 
-    fn prepare_login(&self) -> Result<Arc<dyn ConnectionControl>, AccountStatus> {
+    fn prepare_login(&self) -> Result<(Arc<dyn ConnectionControl>, u64), AccountStatus> {
         self.cancel_active_attempt()?;
         let mut state = self
             .inner
@@ -197,14 +256,15 @@ impl AccountService {
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         let Some(connection) = state.connection.clone() else {
+            state.refresh_revision = state.refresh_revision.wrapping_add(1);
             state.status = login_unavailable_error();
             return Err(state.status.clone());
         };
-        Ok(connection)
+        Ok((connection, state.connection_revision))
     }
 
     fn cancel_active_attempt(&self) -> Result<(), AccountStatus> {
-        let (connection, login_id) = {
+        let (connection, connection_revision, login_id) = {
             let state = self
                 .inner
                 .state
@@ -216,10 +276,16 @@ impl AccountService {
             let Some(connection) = state.connection.clone() else {
                 return Err(state.status.clone());
             };
-            (connection, attempt.login_id.clone())
+            (
+                connection,
+                state.connection_revision,
+                attempt.login_id.clone(),
+            )
         };
         if self.cancel_login(&connection, &login_id).is_err() {
-            return Err(self.set_status(login_unavailable_error()));
+            return Err(
+                self.set_status_for_connection(connection_revision, login_unavailable_error())
+            );
         }
         self.clear_attempt(&login_id);
         Ok(())
@@ -236,27 +302,40 @@ impl AccountService {
         is_cancel_confirmation(response).then_some(()).ok_or(())
     }
 
-    fn install_attempt(&self, attempt: LoginAttempt, status: AccountStatus) {
+    fn install_attempt(
+        &self,
+        connection_revision: u64,
+        attempt: LoginAttempt,
+        status: AccountStatus,
+    ) -> bool {
         let mut state = self
             .inner
             .state
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
+        if state.connection_revision != connection_revision || state.connection.is_none() {
+            return false;
+        }
         state.login_attempt = Some(attempt);
+        state.refresh_revision = state.refresh_revision.wrapping_add(1);
         state.status = status;
+        true
     }
 
     fn cancel_started_attempt(
         &self,
         connection: &Arc<dyn ConnectionControl>,
+        connection_revision: u64,
         attempt: LoginAttempt,
         status: AccountStatus,
     ) -> AccountStatus {
         if self.cancel_login(connection, &attempt.login_id).is_ok() {
             self.clear_attempt(&attempt.login_id);
-            return self.set_status(status);
+            return self.set_status_for_connection(connection_revision, status);
         }
-        self.install_attempt(attempt, status);
+        if self.install_attempt(connection_revision, attempt, status) {
+            return self.status();
+        }
         self.status()
     }
 
@@ -275,13 +354,20 @@ impl AccountService {
         }
     }
 
-    fn set_status(&self, status: AccountStatus) -> AccountStatus {
+    fn set_status_for_connection(
+        &self,
+        connection_revision: u64,
+        status: AccountStatus,
+    ) -> AccountStatus {
         let mut state = self
             .inner
             .state
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        state.status = status;
+        if state.connection_revision == connection_revision && state.connection.is_some() {
+            state.refresh_revision = state.refresh_revision.wrapping_add(1);
+            state.status = status;
+        }
         state.status.clone()
     }
 }
