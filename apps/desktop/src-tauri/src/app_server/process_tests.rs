@@ -2,14 +2,21 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
+use serde_json::Value;
 use serde_json::json;
 
 use super::AppServerSupervisor;
 use super::StatusObserver;
+use crate::app_server::connection::ConnectionControl;
+use crate::app_server::connection::ConnectionError;
+use crate::app_server::connection::NotificationObserver;
 use crate::app_server::protocol::initialize_request;
 use crate::app_server::protocol::initialized_notification;
 use crate::app_server::transport::ProcessControl;
@@ -19,14 +26,14 @@ use crate::app_server::transport::TransportEvent;
 use crate::runtime_status::RuntimeStatus;
 
 const STARTUP_ERROR_MESSAGE: &str = "核心服务暂时无法启动。";
+const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 1);
 
 #[test]
 fn successful_start_transitions_from_stopped_through_starting_to_connected() {
     let observer = Arc::new(RecordingObserver::default());
-    let mut supervisor = supervisor_with(
-        FakeLauncher::succeeding(success_response()),
-        observer.clone(),
-    );
+    let (process, _handle) = FakeProcess::with_response(success_response());
+    let mut supervisor =
+        supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
     assert_eq!(supervisor.start(), connected_status());
     assert_eq!(
@@ -59,16 +66,26 @@ fn launch_failure_transitions_from_stopped_through_starting_to_error() {
 }
 
 #[test]
-fn shutdown_terminates_a_connected_process_and_transitions_to_stopped() {
+fn shutdown_disconnects_pending_requests_and_terminates_the_process_once() {
     let observer = Arc::new(RecordingObserver::default());
     let (process, handle) = FakeProcess::with_response(success_response());
     let mut supervisor =
         supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
     assert_eq!(supervisor.start(), connected_status());
+    let connection = supervisor.connection().expect("connected handle");
+    let pending_connection = connection.clone();
+    let pending = thread::spawn(move || pending_connection.request("account/read", json!({})));
+    wait_until(|| handle.writes().len() == 3);
+
     assert_eq!(supervisor.shutdown(), RuntimeStatus::Stopped);
+    assert_eq!(pending.join().unwrap(), Err(ConnectionError::Disconnected));
+    assert_eq!(
+        connection.request("account/read", json!({})),
+        Err(ConnectionError::Disconnected)
+    );
     assert_eq!(supervisor.shutdown(), RuntimeStatus::Stopped);
-    assert!(handle.terminated());
+    assert_eq!(handle.terminate_calls(), 1);
     assert_eq!(
         observer.statuses(),
         vec![
@@ -118,6 +135,147 @@ fn successful_handshake_writes_initialize_then_initialized() {
             initialized_notification().unwrap(),
         ]
     );
+    let initialize: Value = serde_json::from_str(&handle.writes()[0]).unwrap();
+    assert_eq!(initialize["id"], json!(0));
+}
+
+#[test]
+fn coalesced_initialize_response_and_notification_are_both_consumed() {
+    let observer = Arc::new(RecordingObserver::default());
+    let notifications = Arc::new(RecordingNotificationObserver::default());
+    let (process, handle) = FakeProcess::without_events();
+    handle
+        .send_stdout(format!(
+            "{}\n{}\n",
+            success_response(),
+            json!({
+                "method": "account/updated",
+                "params": { "authMode": "chatgpt" }
+            })
+        ))
+        .unwrap();
+    let mut supervisor = supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer);
+    supervisor.set_notification_observer(notifications.clone());
+
+    assert_eq!(supervisor.start(), connected_status());
+    wait_until(|| !notifications.notifications().is_empty());
+    assert_eq!(
+        notifications.notifications(),
+        vec![(
+            "account/updated".to_string(),
+            json!({ "authMode": "chatgpt" }),
+        )]
+    );
+}
+
+#[test]
+fn post_initialize_response_is_delivered_to_the_waiting_request() {
+    let observer = Arc::new(RecordingObserver::default());
+    let (process, handle) = FakeProcess::with_response(success_response());
+    let mut supervisor = supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer);
+    assert_eq!(supervisor.start(), connected_status());
+
+    let connection = supervisor.connection().expect("connected handle");
+    let request =
+        thread::spawn(move || connection.request("account/read", json!({ "refreshToken": false })));
+    wait_until(|| handle.writes().len() == 3);
+    handle
+        .send_json(json!({
+            "id": 1,
+            "result": { "account": null }
+        }))
+        .unwrap();
+
+    assert_eq!(request.join().unwrap(), Ok(json!({ "account": null })));
+}
+
+#[test]
+fn retry_after_termination_uses_a_new_connection() {
+    let observer = Arc::new(RecordingObserver::default());
+    let (first_process, first_handle) = FakeProcess::with_response(success_response());
+    let (second_process, second_handle) = FakeProcess::with_response(success_response());
+    let mut supervisor = supervisor_with(
+        FakeLauncher::with_attempts([Ok(first_process), Ok(second_process)]),
+        observer.clone(),
+    );
+    assert_eq!(supervisor.start(), connected_status());
+    let old_connection = supervisor.connection().expect("first connection");
+
+    first_handle
+        .send_event(TransportEvent::Terminated(Some(1)))
+        .unwrap();
+    wait_until(|| observer.statuses().last() == Some(&startup_error_status()));
+    assert_eq!(supervisor.retry(), connected_status());
+    assert_eq!(
+        old_connection.request("account/read", json!({})),
+        Err(ConnectionError::Disconnected)
+    );
+
+    let new_connection = supervisor.connection().expect("second connection");
+    let request = thread::spawn(move || new_connection.request("account/read", json!({})));
+    wait_until(|| second_handle.writes().len() == 3);
+    second_handle
+        .send_json(json!({
+            "id": 1,
+            "result": { "account": null }
+        }))
+        .unwrap();
+    assert_eq!(request.join().unwrap(), Ok(json!({ "account": null })));
+    assert_eq!(first_handle.terminate_calls(), 0);
+}
+
+#[test]
+fn invalid_runtime_json_disconnects_pending_and_terminates() {
+    assert_reader_failure(
+        |handle| handle.send_stdout("not-json\n".to_string()).unwrap(),
+        /*expected_terminate_calls*/ 1,
+    );
+}
+
+#[test]
+fn runtime_transport_error_disconnects_pending_and_terminates() {
+    assert_reader_failure(
+        |handle| {
+            handle
+                .send_event(TransportEvent::Error("read failed".to_string()))
+                .unwrap()
+        },
+        /*expected_terminate_calls*/ 1,
+    );
+}
+
+#[test]
+fn closed_runtime_channel_disconnects_pending_and_terminates() {
+    assert_reader_failure(drop, /*expected_terminate_calls*/ 1);
+}
+
+#[test]
+fn server_request_write_failure_disconnects_pending_and_terminates() {
+    assert_reader_failure(
+        |handle| {
+            handle.fail_writes();
+            handle
+                .send_json(json!({
+                    "id": "server-1",
+                    "method": "item/tool/call",
+                    "params": {}
+                }))
+                .unwrap();
+        },
+        /*expected_terminate_calls*/ 1,
+    );
+}
+
+#[test]
+fn process_termination_disconnects_pending_without_terminating_again() {
+    assert_reader_failure(
+        |handle| {
+            handle
+                .send_event(TransportEvent::Terminated(Some(23)))
+                .unwrap()
+        },
+        /*expected_terminate_calls*/ 0,
+    );
 }
 
 #[test]
@@ -128,7 +286,7 @@ fn initialization_timeout_transitions_to_error_and_terminates_the_process() {
         supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
     assert_eq!(supervisor.start(), startup_error_status());
-    assert!(handle.terminated());
+    assert_eq!(handle.terminate_calls(), 1);
     assert_eq!(observer.statuses().last(), Some(&startup_error_status()));
 }
 
@@ -172,6 +330,36 @@ fn startup_error_status() -> RuntimeStatus {
     }
 }
 
+fn wait_until(mut predicate: impl FnMut() -> bool) {
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
+    while !predicate() {
+        assert!(Instant::now() < deadline, "condition was not met in time");
+        thread::sleep(Duration::from_millis(/*millis*/ 5));
+    }
+}
+
+fn assert_reader_failure(trigger: impl FnOnce(FakeProcessHandle), expected_terminate_calls: usize) {
+    let observer = Arc::new(RecordingObserver::default());
+    let (process, handle) = FakeProcess::with_response(success_response());
+    let control = handle.control.clone();
+    let mut supervisor =
+        supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
+    assert_eq!(supervisor.start(), connected_status());
+
+    let connection = supervisor.connection().expect("connected handle");
+    let pending = thread::spawn(move || connection.request("account/read", json!({})));
+    wait_until(|| handle.writes().len() == 3);
+    trigger(handle);
+
+    assert_eq!(pending.join().unwrap(), Err(ConnectionError::Disconnected));
+    wait_until(|| observer.statuses().last() == Some(&startup_error_status()));
+    assert!(supervisor.connection().is_none());
+    assert_eq!(
+        control.terminate_calls.load(Ordering::SeqCst),
+        expected_terminate_calls
+    );
+}
+
 #[derive(Default)]
 struct RecordingObserver {
     statuses: Mutex<Vec<RuntimeStatus>>,
@@ -189,16 +377,31 @@ impl StatusObserver for RecordingObserver {
     }
 }
 
+#[derive(Default)]
+struct RecordingNotificationObserver {
+    notifications: Mutex<Vec<(String, Value)>>,
+}
+
+impl RecordingNotificationObserver {
+    fn notifications(&self) -> Vec<(String, Value)> {
+        self.notifications.lock().unwrap().clone()
+    }
+}
+
+impl NotificationObserver for RecordingNotificationObserver {
+    fn on_notification(&self, method: &str, params: &Value) {
+        self.notifications
+            .lock()
+            .unwrap()
+            .push((method.to_string(), params.clone()));
+    }
+}
+
 struct FakeLauncher {
     attempts: VecDeque<Result<ProcessTransport, String>>,
 }
 
 impl FakeLauncher {
-    fn succeeding(response: String) -> Self {
-        let (process, _handle) = FakeProcess::with_response(response);
-        Self::with_attempts([Ok(process)])
-    }
-
     fn failing(message: &str) -> Self {
         Self::with_attempts([Err(message.to_string())])
     }
@@ -233,11 +436,12 @@ impl FakeProcess {
         let (events, receiver) = mpsc::channel();
         let control = Arc::new(FakeProcessControl {
             writes: Mutex::new(Vec::new()),
-            terminated: AtomicBool::new(false),
-            events,
+            fail_writes: AtomicBool::new(false),
+            terminate_calls: AtomicUsize::new(0),
         });
         let handle = FakeProcessHandle {
             control: control.clone(),
+            events,
         };
         (ProcessTransport::new(control, receiver), handle)
     }
@@ -246,6 +450,7 @@ impl FakeProcess {
 #[derive(Clone)]
 struct FakeProcessHandle {
     control: Arc<FakeProcessControl>,
+    events: mpsc::Sender<TransportEvent>,
 }
 
 impl FakeProcessHandle {
@@ -253,32 +458,44 @@ impl FakeProcessHandle {
         self.control.writes.lock().unwrap().clone()
     }
 
-    fn terminated(&self) -> bool {
-        self.control.terminated.load(Ordering::SeqCst)
+    fn terminate_calls(&self) -> usize {
+        self.control.terminate_calls.load(Ordering::SeqCst)
+    }
+
+    fn fail_writes(&self) {
+        self.control.fail_writes.store(true, Ordering::SeqCst);
+    }
+
+    fn send_json(&self, value: Value) -> Result<(), String> {
+        self.send_stdout(format!("{value}\n"))
+    }
+
+    fn send_stdout(&self, stdout: String) -> Result<(), String> {
+        self.send_event(TransportEvent::Stdout(stdout.into_bytes()))
     }
 
     fn send_event(&self, event: TransportEvent) -> Result<(), String> {
-        self.control
-            .events
-            .send(event)
-            .map_err(|error| error.to_string())
+        self.events.send(event).map_err(|error| error.to_string())
     }
 }
 
 struct FakeProcessControl {
     writes: Mutex<Vec<String>>,
-    terminated: AtomicBool,
-    events: mpsc::Sender<TransportEvent>,
+    fail_writes: AtomicBool,
+    terminate_calls: AtomicUsize,
 }
 
 impl ProcessControl for FakeProcessControl {
     fn write(&self, message: &str) -> Result<(), String> {
+        if self.fail_writes.load(Ordering::SeqCst) {
+            return Err("write failed".to_string());
+        }
         self.writes.lock().unwrap().push(message.to_string());
         Ok(())
     }
 
     fn terminate(&self) -> Result<(), String> {
-        self.terminated.store(true, Ordering::SeqCst);
+        self.terminate_calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
 }
