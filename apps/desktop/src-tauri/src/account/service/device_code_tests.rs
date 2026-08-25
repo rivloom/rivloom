@@ -13,11 +13,15 @@ use tauri::Url;
 use super::AccountService;
 use super::tests::FakeConnection;
 use super::tests::RecordedRequest;
+use super::tests::StatusTask;
 use super::tests::browser_harness;
 use super::tests::browser_login_response;
 use super::tests::browser_start_request;
+use super::tests::controlled_browser_service;
 use super::tests::login_unavailable_error;
+use super::tests::next_request;
 use super::tests::request;
+use super::tests::spawn_status_task;
 use crate::account::login::UrlOpener;
 use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionError;
@@ -88,6 +92,70 @@ fn browser_and_device_starts_cancel_the_previous_attempt_before_switching() {
     assert_eq!(
         opener.opened_urls(),
         vec!["https://auth.openai.com/oauth".to_string()]
+    );
+}
+
+#[test]
+fn device_login_holds_the_serialization_gate_until_the_attempt_is_installed() {
+    let (service, opener, request_receiver) = controlled_browser_service();
+    let login = spawn_device_login(&service);
+    let request = next_request(&request_receiver, "device login request should arrive");
+    assert!(matches!(
+        service.inner.login_operation.try_lock(),
+        Err(TryLockError::WouldBlock)
+    ));
+    request.respond(
+        device_start_request(),
+        device_login_response(
+            "device-login",
+            "https://auth.openai.com/codex/device",
+            "ABCD-1234",
+        ),
+    );
+    assert_eq!(
+        (
+            login.wait("device login should finish"),
+            opener.opened_urls()
+        ),
+        (device_pending_status(), Vec::<String>::new())
+    );
+}
+
+#[test]
+fn a_valid_device_login_on_an_old_connection_is_canceled_without_exposing_values() {
+    let (service, opener, request_receiver) = controlled_browser_service();
+    let old_login = spawn_device_login(&service);
+    let old_request = next_request(
+        &request_receiver,
+        "old device login should reach the connection",
+    );
+    service.connect(Arc::new(FakeConnection::new(vec![Ok(json!({
+        "account": null,
+        "requiresOpenaiAuth": true,
+    }))])));
+    assert_eq!(service.refresh(), AccountStatus::SignedOut);
+    old_request.respond(
+        device_start_request(),
+        device_login_response(
+            "old-device",
+            "https://auth.openai.com/codex/device",
+            "STALE-CODE",
+        ),
+    );
+    next_request(&request_receiver, "old device login should be canceled")
+        .respond(cancel_request("old-device"), cancel_response());
+
+    assert_eq!(
+        (
+            old_login.wait("old device login cleanup should finish"),
+            service.status(),
+            opener.opened_urls(),
+        ),
+        (
+            AccountStatus::SignedOut,
+            AccountStatus::SignedOut,
+            Vec::<String>::new(),
+        )
     );
 }
 
@@ -249,6 +317,45 @@ fn invalid_or_mismatched_device_starts_are_canceled_without_exposing_values() {
     assert_eq!(opener.opened_urls(), Vec::<String>::new());
 }
 
+#[test]
+fn failed_rejected_device_cleanup_retains_only_a_non_reopenable_cleanup_handle() {
+    let (service, connection, opener) = browser_harness(
+        vec![
+            device_login_response(
+                "rejected-device",
+                "https://auth.openai.com/codex/device",
+                "",
+            ),
+            Err(ConnectionError::Disconnected),
+            cancel_response(),
+            device_login_response(
+                "replacement-device",
+                "https://auth.openai.com/codex/device",
+                "ABCD-1234",
+            ),
+        ],
+        vec![],
+    );
+
+    assert_eq!(service.start_device_code_login(), login_unavailable_error());
+    assert_eq!(
+        service.open_device_verification(),
+        login_unavailable_error()
+    );
+    assert_eq!(opener.opened_urls(), Vec::<String>::new());
+    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(
+        connection.requests(),
+        vec![
+            device_start_request(),
+            cancel_request("rejected-device"),
+            cancel_request("rejected-device"),
+            device_start_request(),
+        ]
+    );
+    assert_eq!(opener.opened_urls(), Vec::<String>::new());
+}
+
 struct BlockingUrlOpener {
     entered_sender: Mutex<Option<mpsc::Sender<String>>>,
     release_receiver: Mutex<mpsc::Receiver<()>>,
@@ -269,6 +376,11 @@ impl UrlOpener for BlockingUrlOpener {
             .recv_timeout(Duration::from_secs(/*secs*/ 2))
             .map_err(|_| ())
     }
+}
+
+fn spawn_device_login(service: &AccountService) -> StatusTask {
+    let service = service.clone();
+    spawn_status_task(move || service.start_device_code_login())
 }
 
 fn device_login_response(

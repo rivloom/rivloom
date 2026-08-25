@@ -478,7 +478,7 @@ fn unexpected_device_responses_are_canceled_and_retained_until_cleanup() {
     );
 }
 
-fn controlled_browser_service() -> (
+pub(super) fn controlled_browser_service() -> (
     AccountService,
     Arc<FakeUrlOpener>,
     mpsc::Receiver<ControlledRequest>,
@@ -495,7 +495,9 @@ fn spawn_browser_login(service: &AccountService) -> StatusTask {
     spawn_status_task(move || service.start_browser_login())
 }
 
-fn spawn_status_task(operation: impl FnOnce() -> AccountStatus + Send + 'static) -> StatusTask {
+pub(super) fn spawn_status_task(
+    operation: impl FnOnce() -> AccountStatus + Send + 'static,
+) -> StatusTask {
     let (result_sender, result_receiver) = mpsc::channel();
     let thread = thread::spawn(move || {
         let _ = result_sender.send(operation());
@@ -506,19 +508,22 @@ fn spawn_status_task(operation: impl FnOnce() -> AccountStatus + Send + 'static)
     }
 }
 
-fn next_request(receiver: &mpsc::Receiver<ControlledRequest>, message: &str) -> ControlledRequest {
+pub(super) fn next_request(
+    receiver: &mpsc::Receiver<ControlledRequest>,
+    message: &str,
+) -> ControlledRequest {
     receiver
         .recv_timeout(Duration::from_secs(/*secs*/ 1))
         .unwrap_or_else(|error| panic!("{message}: {error}"))
 }
 
-struct StatusTask {
+pub(super) struct StatusTask {
     result_receiver: mpsc::Receiver<AccountStatus>,
     thread: thread::JoinHandle<()>,
 }
 
 impl StatusTask {
-    fn wait(self, message: &str) -> AccountStatus {
+    pub(super) fn wait(self, message: &str) -> AccountStatus {
         let status = self
             .result_receiver
             .recv_timeout(Duration::from_secs(/*secs*/ 1))
@@ -602,13 +607,17 @@ struct BlockingConnection {
     response_receiver: Mutex<mpsc::Receiver<Result<Value, ConnectionError>>>,
 }
 
-struct ControlledRequest {
+pub(super) struct ControlledRequest {
     request: RecordedRequest,
     response_sender: mpsc::Sender<Result<Value, ConnectionError>>,
 }
 
 impl ControlledRequest {
-    fn respond(self, expected: RecordedRequest, response: Result<Value, ConnectionError>) {
+    pub(super) fn respond(
+        self,
+        expected: RecordedRequest,
+        response: Result<Value, ConnectionError>,
+    ) {
         assert_eq!(self.request, expected);
         self.response_sender.send(response).unwrap();
     }
