@@ -51,6 +51,25 @@ fn parses_notification() {
 }
 
 #[test]
+fn parses_calls_with_omitted_params_as_null() {
+    assert_eq!(
+        parse_inbound_message(r#"{"method":"account/updated"}"#).unwrap(),
+        InboundMessage::Notification {
+            method: "account/updated".to_string(),
+            params: json!(null),
+        }
+    );
+    assert_eq!(
+        parse_inbound_message(r#"{"method":"item/tool/call","id":"call-1"}"#).unwrap(),
+        InboundMessage::ServerRequest {
+            id: json!("call-1"),
+            method: "item/tool/call".to_string(),
+            params: json!(null),
+        }
+    );
+}
+
+#[test]
 fn parses_server_request_and_preserves_its_id() {
     let message = parse_inbound_message(
         r#"{"method":"item/commandExecution/requestApproval","id":"approval-1","params":{"command":"cargo test"}}"#,

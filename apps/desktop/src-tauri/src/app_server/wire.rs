@@ -34,8 +34,6 @@ pub(super) enum WireError {
     ExpectedObject,
     #[error("App Server request or notification must contain a string method")]
     InvalidMethod,
-    #[error("App Server request or notification must contain params")]
-    MissingParams,
     #[error("App Server server-request ID must be a string or integer")]
     InvalidServerRequestId,
     #[error("App Server response ID must be a non-negative integer")]
@@ -67,10 +65,7 @@ fn parse_call(object: &Map<String, Value>) -> Result<InboundMessage, WireError> 
         .and_then(Value::as_str)
         .ok_or(WireError::InvalidMethod)?
         .to_string();
-    let params = object
-        .get("params")
-        .ok_or(WireError::MissingParams)?
-        .clone();
+    let params = object.get("params").cloned().unwrap_or(Value::Null);
 
     let Some(id) = object.get("id") else {
         return Ok(InboundMessage::Notification { method, params });
