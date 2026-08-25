@@ -1,7 +1,7 @@
 mod app_server;
 pub mod runtime_status;
 
-use app_server::process::AppServerState;
+use app_server::state::AppServerState;
 use runtime_status::RuntimeStatus;
 use tauri::AppHandle;
 use tauri::Manager;
