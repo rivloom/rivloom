@@ -9,8 +9,10 @@ use std::time::Duration;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
+use tauri::Url;
 
 use super::AccountService;
+use crate::account::login::UrlOpener;
 use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
@@ -213,6 +215,84 @@ fn an_older_read_on_the_same_connection_cannot_overwrite_a_newer_result() {
     assert_eq!(service.status(), AccountStatus::SignedOut);
 }
 
+#[test]
+fn failed_browser_cleanup_retains_the_attempt_for_the_next_retry() {
+    let (service, connection, _) = browser_harness(
+        vec![
+            browser_login_response("first-login", "https://auth.openai.com/first"),
+            Err(ConnectionError::Timeout),
+            Ok(json!({ "status": "canceled" })),
+            browser_login_response("second-login", "https://auth.openai.com/second"),
+        ],
+        vec![Err(())],
+    );
+
+    assert_eq!(service.start_browser_login(), browser_open_error());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        connection.requests(),
+        vec![
+            browser_start_request(),
+            request("account/login/cancel", json!({ "loginId": "first-login" }),),
+            request("account/login/cancel", json!({ "loginId": "first-login" }),),
+            browser_start_request(),
+        ]
+    );
+}
+
+#[test]
+fn invalid_browser_urls_are_canceled_and_suggest_device_code() {
+    let (service, connection, opener) = browser_harness(
+        vec![
+            browser_login_response(
+                "TOP_SECRET_LOGIN_ID",
+                "https://openai.com.evil.example/oauth?secret=TOP_SECRET",
+            ),
+            Ok(json!({ "status": "notFound" })),
+        ],
+        vec![],
+    );
+
+    assert_eq!(service.start_browser_login(), browser_open_error());
+    assert_eq!(opener.opened_urls(), Vec::<String>::new());
+    assert_eq!(
+        connection.requests(),
+        vec![
+            browser_start_request(),
+            request(
+                "account/login/cancel",
+                json!({ "loginId": "TOP_SECRET_LOGIN_ID" }),
+            ),
+        ]
+    );
+    let serialized = serde_json::to_string(&service.status()).unwrap();
+    assert!(!serialized.contains("TOP_SECRET"));
+}
+
+#[test]
+fn browser_start_failures_are_retryable_and_do_not_open_or_leak() {
+    let responses = vec![
+        Err(ConnectionError::Timeout),
+        Ok(json!({ "malformed": "TOP_SECRET" })),
+        Ok(json!({ "type": "future", "secret": "TOP_SECRET" })),
+        browser_login_response("", "https://auth.openai.com/?secret=TOP_SECRET"),
+    ];
+
+    for response in responses {
+        let (service, _, opener) = browser_harness(vec![response], vec![]);
+        assert_eq!(service.start_browser_login(), login_unavailable_error());
+        assert_eq!(opener.opened_urls(), Vec::<String>::new());
+        assert!(
+            !serde_json::to_string(&service.status())
+                .unwrap()
+                .contains("TOP_SECRET")
+        );
+    }
+
+    let service = AccountService::new();
+    assert_eq!(service.start_browser_login(), login_unavailable_error());
+}
+
 struct Harness {
     service: AccountService,
     connection: Arc<FakeConnection>,
@@ -228,6 +308,17 @@ impl Harness {
             connection,
         }
     }
+}
+
+fn browser_harness(
+    responses: Vec<Result<Value, ConnectionError>>,
+    open_results: Vec<Result<(), ()>>,
+) -> (AccountService, Arc<FakeConnection>, Arc<FakeUrlOpener>) {
+    let connection = Arc::new(FakeConnection::new(responses));
+    let opener = Arc::new(FakeUrlOpener::new(open_results));
+    let service = AccountService::with_url_opener(opener.clone());
+    service.connect(connection.clone());
+    (service, connection, opener)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -285,6 +376,41 @@ struct ControlledConnection {
     request_sender: mpsc::Sender<ControlledRequest>,
 }
 
+struct FakeUrlOpener {
+    results: Mutex<VecDeque<Result<(), ()>>>,
+    opened_urls: Mutex<Vec<String>>,
+}
+
+impl FakeUrlOpener {
+    fn new(results: Vec<Result<(), ()>>) -> Self {
+        Self {
+            results: Mutex::new(results.into()),
+            opened_urls: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn opened_urls(&self) -> Vec<String> {
+        self.opened_urls
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+}
+
+impl UrlOpener for FakeUrlOpener {
+    fn open(&self, url: &Url) -> Result<(), ()> {
+        self.opened_urls
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(url.as_str().to_string());
+        self.results
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or(Ok(()))
+    }
+}
+
 impl ConnectionControl for ControlledConnection {
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError> {
         let (response_sender, response_receiver) = mpsc::channel();
@@ -323,6 +449,25 @@ fn signed_in_response() -> Result<Value, ConnectionError> {
     }))
 }
 
+fn browser_login_response(login_id: &str, auth_url: &str) -> Result<Value, ConnectionError> {
+    Ok(json!({
+        "type": "chatgpt",
+        "loginId": login_id,
+        "authUrl": auth_url,
+    }))
+}
+
+fn browser_start_request() -> RecordedRequest {
+    request(
+        "account/login/start",
+        json!({
+            "type": "chatgpt",
+            "useHostedLoginSuccessPage": true,
+            "appBrand": "chatgpt",
+        }),
+    )
+}
+
 fn signed_in_status() -> AccountStatus {
     AccountStatus::SignedIn {
         email: None,
@@ -341,5 +486,19 @@ fn unsupported_account_error() -> AccountStatus {
     AccountStatus::Error {
         message: "当前核心服务配置不支持 ChatGPT 账号登录。".to_string(),
         retryable: false,
+    }
+}
+
+fn browser_open_error() -> AccountStatus {
+    AccountStatus::Error {
+        message: "无法打开 ChatGPT 登录页面，请尝试设备码登录。".to_string(),
+        retryable: true,
+    }
+}
+
+fn login_unavailable_error() -> AccountStatus {
+    AccountStatus::Error {
+        message: "ChatGPT 登录暂时不可用，请重试。".to_string(),
+        retryable: true,
     }
 }
