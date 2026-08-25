@@ -478,7 +478,7 @@ fn unexpected_device_responses_are_canceled_and_retained_until_cleanup() {
     );
 }
 
-fn controlled_browser_service() -> (
+pub(super) fn controlled_browser_service() -> (
     AccountService,
     Arc<FakeUrlOpener>,
     mpsc::Receiver<ControlledRequest>,
@@ -495,7 +495,9 @@ fn spawn_browser_login(service: &AccountService) -> StatusTask {
     spawn_status_task(move || service.start_browser_login())
 }
 
-fn spawn_status_task(operation: impl FnOnce() -> AccountStatus + Send + 'static) -> StatusTask {
+pub(super) fn spawn_status_task(
+    operation: impl FnOnce() -> AccountStatus + Send + 'static,
+) -> StatusTask {
     let (result_sender, result_receiver) = mpsc::channel();
     let thread = thread::spawn(move || {
         let _ = result_sender.send(operation());
@@ -506,19 +508,22 @@ fn spawn_status_task(operation: impl FnOnce() -> AccountStatus + Send + 'static)
     }
 }
 
-fn next_request(receiver: &mpsc::Receiver<ControlledRequest>, message: &str) -> ControlledRequest {
+pub(super) fn next_request(
+    receiver: &mpsc::Receiver<ControlledRequest>,
+    message: &str,
+) -> ControlledRequest {
     receiver
         .recv_timeout(Duration::from_secs(/*secs*/ 1))
         .unwrap_or_else(|error| panic!("{message}: {error}"))
 }
 
-struct StatusTask {
+pub(super) struct StatusTask {
     result_receiver: mpsc::Receiver<AccountStatus>,
     thread: thread::JoinHandle<()>,
 }
 
 impl StatusTask {
-    fn wait(self, message: &str) -> AccountStatus {
+    pub(super) fn wait(self, message: &str) -> AccountStatus {
         let status = self
             .result_receiver
             .recv_timeout(Duration::from_secs(/*secs*/ 1))
@@ -545,7 +550,7 @@ impl Harness {
     }
 }
 
-fn browser_harness(
+pub(super) fn browser_harness(
     responses: Vec<Result<Value, ConnectionError>>,
     open_results: Vec<Result<(), ()>>,
 ) -> (AccountService, Arc<FakeConnection>, Arc<FakeUrlOpener>) {
@@ -557,25 +562,25 @@ fn browser_harness(
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct RecordedRequest {
-    method: String,
-    params: Value,
+pub(super) struct RecordedRequest {
+    pub(super) method: String,
+    pub(super) params: Value,
 }
 
-struct FakeConnection {
+pub(super) struct FakeConnection {
     responses: Mutex<VecDeque<Result<Value, ConnectionError>>>,
     requests: Mutex<Vec<RecordedRequest>>,
 }
 
 impl FakeConnection {
-    fn new(responses: Vec<Result<Value, ConnectionError>>) -> Self {
+    pub(super) fn new(responses: Vec<Result<Value, ConnectionError>>) -> Self {
         Self {
             responses: Mutex::new(responses.into()),
             requests: Mutex::new(Vec::new()),
         }
     }
 
-    fn requests(&self) -> Vec<RecordedRequest> {
+    pub(super) fn requests(&self) -> Vec<RecordedRequest> {
         self.requests
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -602,13 +607,17 @@ struct BlockingConnection {
     response_receiver: Mutex<mpsc::Receiver<Result<Value, ConnectionError>>>,
 }
 
-struct ControlledRequest {
+pub(super) struct ControlledRequest {
     request: RecordedRequest,
     response_sender: mpsc::Sender<Result<Value, ConnectionError>>,
 }
 
 impl ControlledRequest {
-    fn respond(self, expected: RecordedRequest, response: Result<Value, ConnectionError>) {
+    pub(super) fn respond(
+        self,
+        expected: RecordedRequest,
+        response: Result<Value, ConnectionError>,
+    ) {
         assert_eq!(self.request, expected);
         self.response_sender.send(response).unwrap();
     }
@@ -618,7 +627,7 @@ struct ControlledConnection {
     request_sender: mpsc::Sender<ControlledRequest>,
 }
 
-struct FakeUrlOpener {
+pub(super) struct FakeUrlOpener {
     results: Mutex<VecDeque<Result<(), ()>>>,
     opened_urls: Mutex<Vec<String>>,
 }
@@ -646,14 +655,14 @@ impl UrlOpener for BlockingUrlOpener {
 }
 
 impl FakeUrlOpener {
-    fn new(results: Vec<Result<(), ()>>) -> Self {
+    pub(super) fn new(results: Vec<Result<(), ()>>) -> Self {
         Self {
             results: Mutex::new(results.into()),
             opened_urls: Mutex::new(Vec::new()),
         }
     }
 
-    fn opened_urls(&self) -> Vec<String> {
+    pub(super) fn opened_urls(&self) -> Vec<String> {
         self.opened_urls
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -699,7 +708,7 @@ impl ConnectionControl for BlockingConnection {
     }
 }
 
-fn request(method: &str, params: Value) -> RecordedRequest {
+pub(super) fn request(method: &str, params: Value) -> RecordedRequest {
     RecordedRequest {
         method: method.to_string(),
         params,
@@ -713,7 +722,10 @@ fn signed_in_response() -> Result<Value, ConnectionError> {
     }))
 }
 
-fn browser_login_response(login_id: &str, auth_url: &str) -> Result<Value, ConnectionError> {
+pub(super) fn browser_login_response(
+    login_id: &str,
+    auth_url: &str,
+) -> Result<Value, ConnectionError> {
     Ok(json!({
         "type": "chatgpt",
         "loginId": login_id,
@@ -730,7 +742,7 @@ fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
     }))
 }
 
-fn browser_start_request() -> RecordedRequest {
+pub(super) fn browser_start_request() -> RecordedRequest {
     request(
         "account/login/start",
         json!({
@@ -762,14 +774,14 @@ fn unsupported_account_error() -> AccountStatus {
     }
 }
 
-fn browser_open_error() -> AccountStatus {
+pub(super) fn browser_open_error() -> AccountStatus {
     AccountStatus::Error {
         message: "无法打开 ChatGPT 登录页面，请尝试设备码登录。".to_string(),
         retryable: true,
     }
 }
 
-fn login_unavailable_error() -> AccountStatus {
+pub(super) fn login_unavailable_error() -> AccountStatus {
     AccountStatus::Error {
         message: "ChatGPT 登录暂时不可用，请重试。".to_string(),
         retryable: true,

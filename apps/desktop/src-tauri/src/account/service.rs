@@ -44,6 +44,17 @@ struct AccountServiceState {
 #[derive(Clone)]
 struct LoginAttempt {
     login_id: String,
+    kind: LoginAttemptKind,
+}
+
+#[derive(Clone)]
+enum LoginAttemptKind {
+    Browser,
+    CleanupOnly,
+    DeviceCode {
+        verification_url: Url,
+        user_code: String,
+    },
 }
 
 struct UnavailableUrlOpener;
@@ -197,7 +208,10 @@ impl AccountService {
                 return self.cancel_started_attempt(
                     &connection,
                     connection_revision,
-                    LoginAttempt { login_id },
+                    LoginAttempt {
+                        login_id,
+                        kind: LoginAttemptKind::CleanupOnly,
+                    },
                     login_unavailable_error(),
                 );
             }
@@ -211,7 +225,10 @@ impl AccountService {
         if login_id.is_empty() {
             return self.set_status_for_connection(connection_revision, login_unavailable_error());
         }
-        let attempt = LoginAttempt { login_id };
+        let attempt = LoginAttempt {
+            login_id,
+            kind: LoginAttemptKind::Browser,
+        };
         let Some(auth_url) = parse_official_auth_url(&auth_url) else {
             return self.cancel_started_attempt(
                 &connection,
@@ -372,6 +389,8 @@ impl AccountService {
     }
 }
 
+mod device_code;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AccountReadResponse {
@@ -454,3 +473,7 @@ fn unsupported_account_error() -> AccountStatus {
 #[cfg(test)]
 #[path = "service_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "service/device_code_tests.rs"]
+mod device_code_tests;
