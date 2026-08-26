@@ -1,11 +1,10 @@
-use std::sync::Arc;
-use std::sync::TryLockError;
+use std::sync::{Arc, TryLockError};
 
 use pretty_assertions::assert_eq;
-use serde_json::Value;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::AccountService;
+use super::retryable_account_error;
 use super::tests::FakeConnection;
 use super::tests::FakeUrlOpener;
 use super::tests::RecordedRequest;
@@ -15,6 +14,8 @@ use super::tests::controlled_browser_service;
 use super::tests::login_unavailable_error;
 use super::tests::next_request;
 use super::tests::request;
+use super::tests::request_without_params;
+use super::tests::signed_in_response;
 use super::tests::spawn_status_task;
 use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionError;
@@ -79,7 +80,7 @@ fn successful_logout_is_parameterless_and_rereads_backend_truth() {
         connection.requests(),
         vec![
             account_read_request(),
-            request("account/logout", Value::Null),
+            request_without_params("account/logout"),
             account_read_request(),
         ]
     );
@@ -119,7 +120,7 @@ fn logout_after_canceling_a_pending_login_never_retains_temporary_values() {
         vec![
             device_start_request(),
             cancel_request("cancel-before-logout"),
-            request("account/logout", Value::Null),
+            request_without_params("account/logout"),
         ]
     );
 }
@@ -147,7 +148,7 @@ fn stale_logout_failures_return_the_reconnected_account_status() {
     assert_eq!(service.connect(current_connection), AccountStatus::Checking);
     assert_eq!(service.refresh(), AccountStatus::SignedOut);
     old_logout.respond(
-        request("account/logout", Value::Null),
+        request_without_params("account/logout"),
         Err(ConnectionError::Timeout),
     );
 
@@ -174,7 +175,7 @@ fn logout_holds_the_login_gate_through_its_follow_up_read() {
         let service = service.clone();
         spawn_status_task(move || service.start_browser_login())
     };
-    logout_request.respond(request("account/logout", Value::Null), Ok(json!({})));
+    logout_request.respond(request_without_params("account/logout"), Ok(json!({})));
     next_request(
         &request_receiver,
         "logout follow-up account/read should arrive before login",
@@ -223,7 +224,7 @@ fn confirmed_cancel_invalidates_an_older_account_read() {
     next_request(&request_receiver, "active login should be canceled")
         .respond(cancel_request("cancel-with-stale-read"), cancel_response());
     next_request(&request_receiver, "logout should follow cancellation").respond(
-        request("account/logout", Value::Null),
+        request_without_params("account/logout"),
         Err(ConnectionError::Timeout),
     );
     assert_eq!(
@@ -252,7 +253,7 @@ fn successful_cancel_with_failed_reread_clears_temporary_values() {
 
     assert_eq!(
         (service.cancel_account_login(), service.status()),
-        (account_error(), account_error())
+        (retryable_account_error(), retryable_account_error())
     );
     assert!(
         !serde_json::to_string(&service.status())
@@ -272,7 +273,7 @@ fn successful_logout_with_failed_reread_does_not_retain_signed_in() {
 
     assert_eq!(
         (service.logout_account(), service.status()),
-        (account_error(), account_error())
+        (retryable_account_error(), retryable_account_error())
     );
 }
 
@@ -313,13 +314,6 @@ fn cancel_response() -> Result<Value, ConnectionError> {
     Ok(json!({ "status": "canceled" }))
 }
 
-fn signed_in_response() -> Result<Value, ConnectionError> {
-    Ok(json!({
-        "account": { "type": "chatgpt", "email": null, "planType": "plus" },
-        "requiresOpenaiAuth": true,
-    }))
-}
-
 fn signed_out_response() -> Result<Value, ConnectionError> {
     Ok(json!({ "account": null, "requiresOpenaiAuth": true }))
 }
@@ -341,13 +335,6 @@ fn device_pending_status() -> AccountStatus {
 fn logout_error() -> AccountStatus {
     AccountStatus::Error {
         message: "无法退出 ChatGPT，请重试。".to_string(),
-        retryable: true,
-    }
-}
-
-fn account_error() -> AccountStatus {
-    AccountStatus::Error {
-        message: "账号状态暂时不可用。".to_string(),
         retryable: true,
     }
 }

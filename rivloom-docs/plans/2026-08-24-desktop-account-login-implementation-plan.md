@@ -1,6 +1,7 @@
 # Rivloom Desktop Account Login Implementation Plan
 
-Plan status: A1.1 through A1.2a-2a3 merged and verified; A1.2a-2b1 is in progress.
+Plan status: A1.1 through A1.2a-2a2b merged and verified; A1.2a-2a3 implementation and verification
+are complete.
 
 > **For Codex:** Use `$executing-plans` task-by-task. After every task, run its verification, report
 > the result, and wait for user approval before continuing.
@@ -29,12 +30,10 @@ Vitest, Testing Library, CSS Modules, pnpm.
   baseline.
 - A1.2a-2a2b was merged through PR #12; use merge commit `ce55d853dd` as the verified lifecycle
   concurrency baseline.
-- A1.2a-2a3 was merged through PR #13; use merge commit `50d031fd6c` as the verified device-code
-  and switching baseline.
-- For A1.2a-2b1, work only in
-  `C:\project\opencohive\.worktrees\desktop-account-completion-actions-a12b` on
-  `codex/desktop-account-actions-a12b1`, created from `50d031fd6c`.
-- Create fresh branches and worktrees for A1.2a-2b2, A1.2b and A1.2c only
+- For A1.2a-2a3, work only in
+  `C:\project\opencohive\.worktrees\desktop-account-device-code-switching-a12a3` on
+  `codex/desktop-account-device-code-switching-a12a3`, created from `ce55d853dd`.
+- Create fresh branches and worktrees for A1.2a-2b, A1.2b and A1.2c only
   after the preceding PR is merged and the user explicitly approves the next setup step.
 - Follow `2026-08-24-desktop-account-login-design.md` and the repository `AGENTS.md`.
 - Do not modify `codex-rs`, App Server protocol, `CODEX_SANDBOX_*`, or upstream docs.
@@ -57,10 +56,8 @@ Vitest, Testing Library, CSS Modules, pnpm.
   starts, stale-read and stale-connection protection, and defensive mismatched-response coverage.
 - **A1.2a-2a3 — Device Code & Switching — complete:** Task 4B3 only. Deliver device-code starts,
   controlled verification opening, retry recovery and browser/device switching.
-- **A1.2a-2b1 — Account Actions:** Task 4B4a only. Deliver explicit cancel, parameterless logout
-  and failure behavior that preserves signed-in state.
-- **A1.2a-2b2 — Completion Notifications:** Task 4B4b only. Deliver matching notifications,
-  deduplicated background refresh and early-completion race protection.
+- **A1.2a-2b — Completion & Account Actions:** Task 4B4 only. Deliver matching notifications,
+  background refresh, explicit cancel and logout behavior.
 - **A1.2b — Account Bridge:** Tasks 5–6 only. Deliver six fixed Tauri commands, one normalized event,
   the typed React bridge and race-safe Hook.
 - **A1.2c — Account UI:** Tasks 7–8 only. Deliver all six UI states, device-code interactions,
@@ -273,57 +270,32 @@ Vitest, Testing Library, CSS Modules, pnpm.
 3. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
    push or PR creation. Suggested commit: `feat(desktop): add ChatGPT device-code login`.
 
-## A1.2a-2b1 — Account Actions
+## A1.2a-2b — Completion & Account Actions (future branch after A1.2a-2a3 merges)
 
-## Task 4B4a: Add explicit cancel and logout actions
+## Task 4B4: Complete the managed login lifecycle
 
 **Files:**
 
-- Create: `apps/desktop/src-tauri/src/account/service/account_actions.rs`
-- Create: `apps/desktop/src-tauri/src/account/service/account_actions_tests.rs`
-- Modify: `apps/desktop/src-tauri/src/account/service.rs` only for module registration
+- Modify: `apps/desktop/src-tauri/src/account/service.rs`
+- Modify: `apps/desktop/src-tauri/src/account/service_tests.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/connection.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/connection_request_tests.rs`
-
-### Steps
-
-1. Write failing tests for cancel cleanup, parameterless logout and logout failure preserving
-   signed-in state.
-2. Add a self-documenting parameterless request method and verify the serialized logout request
-   omits `params` rather than sending `null` or an empty object.
-3. Re-read backend truth after successful cancel and logout. Clear temporary values on terminal
-   cancel paths; preserve signed-in state when logout fails. Never log login IDs or raw payloads.
-4. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
-   push or PR creation. Suggested commit: `feat(desktop): add account cancel and logout actions`.
-
-## A1.2a-2b2 — Completion Notifications (future branch after A1.2a-2b1 merges)
-
-## Task 4B4b: Complete notification-driven login lifecycle
-
-**Files:**
-
-- Create: `apps/desktop/src-tauri/src/account/service/login_completion.rs`
-- Create: `apps/desktop/src-tauri/src/account/service/login_completion_tests.rs`
-- Modify: `apps/desktop/src-tauri/src/account/service.rs` only for bounded lifecycle state,
-  construction and module registration
-- Modify: `apps/desktop/src-tauri/src/account/service/device_code.rs`
-- Modify: `apps/desktop/src-tauri/src/app_server/connection.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/mod.rs`
 
 ### Steps
 
 1. With a manual task spawner, write failing tests for matching/stale completion notifications,
-   deduplicated background reads, reconnect invalidation and completion arriving immediately after
-   the start response but before the attempt is installed.
+   cancel cleanup, parameterless logout and logout failure preserving signed-in state.
 2. Promote `NotificationObserver` to crate-internal visibility without making the connection module
    public. Define a documented `TaskSpawner` trait with a narrow object-safe method.
 3. Notification callbacks must return promptly and schedule deduplicated background `account/read`;
-   they must never synchronously wait for an RPC on the App Server reader thread. Keep pre-install
-   completion IDs bounded and ignore stale login IDs.
-4. Re-read backend truth after successful or failed matching completion and clear temporary values.
-   Never log URL, login ID, code or raw payloads.
+   they must never synchronously wait for an RPC on the App Server reader thread. Ignore stale login
+   IDs.
+4. Re-read backend truth after successful completion, cancel and logout. Clear temporary values on
+   terminal paths; preserve signed-in state when logout fails. Never log URL, login ID, code or raw
+   payloads.
 5. Run focused and full desktop Rust checks, review size, and stop for user approval before commit,
-   push or PR creation. Suggested commit: `feat(desktop): complete login notifications`.
+   push or PR creation. Suggested commit: `feat(desktop): complete ChatGPT login lifecycle`.
 
 ## A1.2b — Account Bridge (future branch after A1.2a merges)
 

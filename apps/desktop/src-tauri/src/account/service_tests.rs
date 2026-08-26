@@ -567,6 +567,8 @@ pub(super) struct RecordedRequest {
     pub(super) params: Value,
 }
 
+const OMITTED_PARAMS_SENTINEL: &str = "__omitted_params__";
+
 pub(super) struct FakeConnection {
     responses: Mutex<VecDeque<Result<Value, ConnectionError>>>,
     requests: Mutex<Vec<RecordedRequest>>,
@@ -600,9 +602,8 @@ impl ConnectionControl for FakeConnection {
             .pop_front()
             .unwrap_or(Err(ConnectionError::Disconnected))
     }
-
     fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError> {
-        self.request(method, Value::Null)
+        self.request(method, json!(OMITTED_PARAMS_SENTINEL))
     }
 }
 
@@ -701,7 +702,7 @@ impl ConnectionControl for ControlledConnection {
     }
 
     fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError> {
-        self.request(method, Value::Null)
+        self.request(method, json!(OMITTED_PARAMS_SENTINEL))
     }
 }
 
@@ -727,7 +728,11 @@ pub(super) fn request(method: &str, params: Value) -> RecordedRequest {
     }
 }
 
-fn signed_in_response() -> Result<Value, ConnectionError> {
+pub(super) fn request_without_params(method: &str) -> RecordedRequest {
+    request(method, json!(OMITTED_PARAMS_SENTINEL))
+}
+
+pub(super) fn signed_in_response() -> Result<Value, ConnectionError> {
     Ok(json!({
         "account": { "type": "chatgpt", "email": null, "planType": "plus" },
         "requiresOpenaiAuth": true,
