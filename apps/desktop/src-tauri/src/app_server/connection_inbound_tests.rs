@@ -6,7 +6,9 @@ use serde_json::Value;
 use serde_json::json;
 
 use super::AppServerConnection;
+use super::ConnectionControl;
 use super::ConnectionError;
+use super::ConnectionIdentity;
 use super::InboundMessage;
 use super::NotificationObserver;
 
@@ -31,6 +33,7 @@ fn notifications_are_forwarded_without_writing() {
     assert_eq!(
         observer.notifications(),
         vec![(
+            connection.connection_identity(),
             "account/updated".to_string(),
             json!({"authMode": "chatgpt"}),
         )]
@@ -116,20 +119,26 @@ fn write_failures_are_sanitized() {
 
 #[derive(Default)]
 struct RecordingObserver {
-    notifications: Mutex<Vec<(String, Value)>>,
+    notifications: Mutex<Vec<(ConnectionIdentity, String, Value)>>,
 }
 
 impl RecordingObserver {
-    fn notifications(&self) -> Vec<(String, Value)> {
+    fn notifications(&self) -> Vec<(ConnectionIdentity, String, Value)> {
         self.notifications.lock().unwrap().clone()
     }
 }
 
 impl NotificationObserver for RecordingObserver {
-    fn on_notification(&self, method: &str, params: &Value) {
-        self.notifications
-            .lock()
-            .unwrap()
-            .push((method.to_string(), params.clone()));
+    fn on_notification(
+        &self,
+        connection_identity: &ConnectionIdentity,
+        method: &str,
+        params: &Value,
+    ) {
+        self.notifications.lock().unwrap().push((
+            connection_identity.clone(),
+            method.to_string(),
+            params.clone(),
+        ));
     }
 }

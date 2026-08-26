@@ -24,8 +24,12 @@ const MAX_PENDING_REQUESTS: usize = 64;
 /// Sends bounded App Server requests for higher-level Rust services.
 ///
 /// Implementations must correlate each response with its caller and return only
-/// sanitized errors that are safe to pass into service-level state mapping.
+/// sanitized errors that are safe to pass into service-level state mapping. The
+/// connection identity must remain stable for the implementation's lifetime and
+/// differ from every independently created connection.
 pub(crate) trait ConnectionControl: Send + Sync {
+    fn connection_identity(&self) -> ConnectionIdentity;
+
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError>;
 
     fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError>;
@@ -33,11 +37,40 @@ pub(crate) trait ConnectionControl: Send + Sync {
 
 /// Receives App Server notifications inside the Rust backend.
 ///
-/// Implementations should return promptly and must decide which normalized
-/// state, if any, is safe to expose outside the backend.
+/// Implementations should use the source connection identity to reject stale
+/// notifications, return promptly, and decide which normalized state, if any,
+/// is safe to expose outside the backend.
 pub(crate) trait NotificationObserver: Send + Sync {
-    fn on_notification(&self, method: &str, params: &Value);
+    fn on_notification(
+        &self,
+        connection_identity: &ConnectionIdentity,
+        method: &str,
+        params: &Value,
+    );
 }
+
+#[derive(Clone)]
+pub(crate) struct ConnectionIdentity(Arc<()>);
+
+impl ConnectionIdentity {
+    pub(crate) fn new() -> Self {
+        Self(Arc::new(()))
+    }
+}
+
+impl std::fmt::Debug for ConnectionIdentity {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ConnectionIdentity(..)")
+    }
+}
+
+impl PartialEq for ConnectionIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for ConnectionIdentity {}
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub(crate) enum ConnectionError {
@@ -71,6 +104,7 @@ pub(super) struct AppServerConnection {
 }
 
 struct ConnectionInner {
+    identity: ConnectionIdentity,
     writer: Box<MessageWriter>,
     next_request_id: AtomicU64,
     state: Mutex<ConnectionState>,
@@ -109,6 +143,7 @@ impl AppServerConnection {
     ) -> Self {
         Self {
             inner: Arc::new(ConnectionInner {
+                identity: ConnectionIdentity::new(),
                 writer: Box::new(writer),
                 next_request_id: AtomicU64::new(FIRST_REQUEST_ID),
                 state: Mutex::new(ConnectionState {
@@ -145,7 +180,7 @@ impl AppServerConnection {
                     .unwrap_or_else(PoisonError::into_inner)
                     .clone();
                 if let Some(observer) = observer {
-                    observer.on_notification(&method, &params);
+                    observer.on_notification(&self.inner.identity, &method, &params);
                 }
             }
             InboundMessage::ServerRequest { id, .. } => {
@@ -274,6 +309,10 @@ impl AppServerConnection {
 }
 
 impl ConnectionControl for AppServerConnection {
+    fn connection_identity(&self) -> ConnectionIdentity {
+        self.inner.identity.clone()
+    }
+
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError> {
         self.request_inner(method, RequestParameters::Present(&params))
     }

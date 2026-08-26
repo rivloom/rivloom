@@ -8,6 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use pretty_assertions::assert_eq;
+use pretty_assertions::assert_ne;
 use serde_json::Value;
 use serde_json::json;
 
@@ -19,6 +20,19 @@ use super::InboundMessage;
 use super::NotificationObserver;
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 5);
+
+#[test]
+fn connection_identity_is_stable_for_clones_and_unique_between_connections() {
+    let first = AppServerConnection::new(|_| Ok(()));
+    let first_clone = first.clone();
+    let second = AppServerConnection::new(|_| Ok(()));
+
+    assert_eq!(
+        first.connection_identity(),
+        first_clone.connection_identity()
+    );
+    assert_ne!(first.connection_identity(), second.connection_identity());
+}
 
 #[test]
 fn requests_use_unique_ids_and_unknown_responses_do_not_disturb_waiters() {
@@ -290,7 +304,12 @@ struct CountingObserver {
 }
 
 impl NotificationObserver for CountingObserver {
-    fn on_notification(&self, _method: &str, _params: &Value) {
+    fn on_notification(
+        &self,
+        _connection_identity: &super::ConnectionIdentity,
+        _method: &str,
+        _params: &Value,
+    ) {
         self.count.fetch_add(1, Ordering::SeqCst);
     }
 }
