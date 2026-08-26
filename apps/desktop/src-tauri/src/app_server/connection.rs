@@ -27,6 +27,8 @@ const MAX_PENDING_REQUESTS: usize = 64;
 /// sanitized errors that are safe to pass into service-level state mapping.
 pub(crate) trait ConnectionControl: Send + Sync {
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError>;
+
+    fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError>;
 }
 
 /// Receives App Server notifications inside the Rust backend.
@@ -57,6 +59,11 @@ pub(crate) enum ConnectionError {
 
 type PendingResult = Result<Value, ConnectionError>;
 type MessageWriter = dyn Fn(&str) -> Result<(), String> + Send + Sync;
+
+enum RequestParameters<'a> {
+    Present(&'a Value),
+    Omitted,
+}
 
 #[derive(Clone)]
 pub(super) struct AppServerConnection {
@@ -200,10 +207,12 @@ impl AppServerConnection {
             .pending
             .remove(&id)
     }
-}
 
-impl ConnectionControl for AppServerConnection {
-    fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError> {
+    fn request_inner(
+        &self,
+        method: &str,
+        params: RequestParameters<'_>,
+    ) -> Result<Value, ConnectionError> {
         let (waiter, response) = mpsc::channel();
         let id = {
             let mut state = self
@@ -229,11 +238,11 @@ impl ConnectionControl for AppServerConnection {
             id
         };
 
-        let line = match json_line(&Request {
-            method,
-            id,
-            params: &params,
-        }) {
+        let params = match params {
+            RequestParameters::Present(params) => Some(params),
+            RequestParameters::Omitted => None,
+        };
+        let line = match json_line(&Request { method, id, params }) {
             Ok(line) => line,
             Err(error) => {
                 self.remove_pending(id);
@@ -264,6 +273,16 @@ impl ConnectionControl for AppServerConnection {
     }
 }
 
+impl ConnectionControl for AppServerConnection {
+    fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError> {
+        self.request_inner(method, RequestParameters::Present(&params))
+    }
+
+    fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError> {
+        self.request_inner(method, RequestParameters::Omitted)
+    }
+}
+
 fn json_line(message: &impl Serialize) -> Result<String, ConnectionError> {
     let mut line = serde_json::to_string(message).map_err(|_| ConnectionError::Serialize)?;
     line.push('\n');
@@ -274,7 +293,8 @@ fn json_line(message: &impl Serialize) -> Result<String, ConnectionError> {
 struct Request<'a> {
     method: &'a str,
     id: u64,
-    params: &'a Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    params: Option<&'a Value>,
 }
 
 #[derive(Serialize)]
