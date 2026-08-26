@@ -85,6 +85,18 @@ fn notifications_do_not_consume_pending_responses() {
 }
 
 #[test]
+fn parameterless_requests_omit_the_params_field() {
+    let harness = TestHarness::default();
+    let request = spawn_parameterless_request(harness.connection.clone(), "account/logout");
+    let write = harness.next_write();
+    let id = request_id(&write);
+    assert_eq!(write, json!({ "method": "account/logout", "id": 1 }));
+
+    harness.respond(id, json!({}));
+    assert_eq!(request.recv_timeout(TEST_TIMEOUT).unwrap(), Ok(json!({})));
+}
+
+#[test]
 fn remote_errors_are_sanitized() {
     let harness = TestHarness::default();
     let request = spawn_request(harness.connection.clone(), "account/read");
@@ -213,6 +225,17 @@ fn spawn_request(
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
         let _ = sender.send(connection.request(method, json!({})));
+    });
+    receiver
+}
+
+fn spawn_parameterless_request(
+    connection: AppServerConnection,
+    method: &'static str,
+) -> Receiver<Result<Value, ConnectionError>> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = sender.send(connection.request_without_params(method));
     });
     receiver
 }

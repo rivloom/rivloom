@@ -368,6 +368,8 @@ impl AccountService {
             .is_some_and(|attempt| attempt.login_id == login_id)
         {
             state.login_attempt = None;
+            state.refresh_revision = state.refresh_revision.wrapping_add(1);
+            state.status = AccountStatus::Checking;
         }
     }
 
@@ -389,6 +391,7 @@ impl AccountService {
     }
 }
 
+mod account_actions;
 mod device_code;
 
 #[derive(Deserialize)]
@@ -477,3 +480,7 @@ mod tests;
 #[cfg(test)]
 #[path = "service/device_code_tests.rs"]
 mod device_code_tests;
+
+#[cfg(test)]
+#[path = "service/account_actions_tests.rs"]
+mod account_actions_tests;

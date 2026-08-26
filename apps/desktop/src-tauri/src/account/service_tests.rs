@@ -600,6 +600,10 @@ impl ConnectionControl for FakeConnection {
             .pop_front()
             .unwrap_or(Err(ConnectionError::Disconnected))
     }
+
+    fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError> {
+        self.request(method, Value::Null)
+    }
 }
 
 struct BlockingConnection {
@@ -695,6 +699,10 @@ impl ConnectionControl for ControlledConnection {
             .unwrap();
         response_receiver.recv().unwrap()
     }
+
+    fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError> {
+        self.request(method, Value::Null)
+    }
 }
 
 impl ConnectionControl for BlockingConnection {
@@ -705,6 +713,10 @@ impl ConnectionControl for BlockingConnection {
             .unwrap_or_else(PoisonError::into_inner)
             .recv()
             .unwrap()
+    }
+
+    fn request_without_params(&self, method: &str) -> Result<Value, ConnectionError> {
+        self.request(method, Value::Null)
     }
 }
 
