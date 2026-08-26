@@ -16,6 +16,10 @@ use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
 
+use self::login_completion::LoginCompletionState;
+use self::login_completion::TaskSpawner;
+use self::login_completion::ThreadTaskSpawner;
+
 const ACCOUNT_UNAVAILABLE_MESSAGE: &str = "账号状态暂时不可用。";
 const BROWSER_OPEN_MESSAGE: &str = "无法打开 ChatGPT 登录页面，请尝试设备码登录。";
 const LOGIN_UNAVAILABLE_MESSAGE: &str = "ChatGPT 登录暂时不可用，请重试。";
@@ -30,12 +34,14 @@ struct AccountServiceInner {
     browser_open_operation: Mutex<()>,
     login_operation: Mutex<()>,
     state: Mutex<AccountServiceState>,
+    task_spawner: Arc<dyn TaskSpawner>,
     url_opener: Arc<dyn UrlOpener>,
 }
 
 struct AccountServiceState {
     connection: Option<Arc<dyn ConnectionControl>>,
     connection_revision: u64,
+    login_completion: LoginCompletionState,
     login_attempt: Option<LoginAttempt>,
     refresh_revision: u64,
     status: AccountStatus,
@@ -71,6 +77,13 @@ impl AccountService {
     }
 
     pub(crate) fn with_url_opener(url_opener: Arc<dyn UrlOpener>) -> Self {
+        Self::with_dependencies(url_opener, Arc::new(ThreadTaskSpawner))
+    }
+
+    fn with_dependencies(
+        url_opener: Arc<dyn UrlOpener>,
+        task_spawner: Arc<dyn TaskSpawner>,
+    ) -> Self {
         Self {
             inner: Arc::new(AccountServiceInner {
                 browser_open_operation: Mutex::new(()),
@@ -78,10 +91,12 @@ impl AccountService {
                 state: Mutex::new(AccountServiceState {
                     connection: None,
                     connection_revision: 0,
+                    login_completion: LoginCompletionState::default(),
                     login_attempt: None,
                     refresh_revision: 0,
                     status: AccountStatus::Checking,
                 }),
+                task_spawner,
                 url_opener,
             }),
         }
@@ -100,6 +115,7 @@ impl AccountService {
             .unwrap_or_else(PoisonError::into_inner);
         state.connection_revision = state.connection_revision.wrapping_add(1);
         state.connection = Some(connection);
+        state.login_completion.reset();
         state.login_attempt = None;
         state.status = AccountStatus::Checking;
         state.status.clone()
@@ -118,6 +134,7 @@ impl AccountService {
             .unwrap_or_else(PoisonError::into_inner);
         state.connection_revision = state.connection_revision.wrapping_add(1);
         state.connection = None;
+        state.login_completion.reset();
         state.login_attempt = None;
         state.status = retryable_account_error();
         state.status.clone()
@@ -300,9 +317,22 @@ impl AccountService {
             )
         };
         if self.cancel_login(&connection, &login_id).is_err() {
-            return Err(
-                self.set_status_for_connection(connection_revision, login_unavailable_error())
-            );
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if state.connection_revision == connection_revision
+                && state.connection.is_some()
+                && state
+                    .login_attempt
+                    .as_ref()
+                    .is_some_and(|attempt| attempt.login_id == login_id)
+            {
+                state.refresh_revision = state.refresh_revision.wrapping_add(1);
+                state.status = login_unavailable_error();
+            }
+            return Err(state.status.clone());
         }
         self.clear_attempt(&login_id);
         Ok(())
@@ -317,60 +347,6 @@ impl AccountService {
             .request("account/login/cancel", json!({ "loginId": login_id }))
             .map_err(|_| ())?;
         is_cancel_confirmation(response).then_some(()).ok_or(())
-    }
-
-    fn install_attempt(
-        &self,
-        connection_revision: u64,
-        attempt: LoginAttempt,
-        status: AccountStatus,
-    ) -> bool {
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if state.connection_revision != connection_revision || state.connection.is_none() {
-            return false;
-        }
-        state.login_attempt = Some(attempt);
-        state.refresh_revision = state.refresh_revision.wrapping_add(1);
-        state.status = status;
-        true
-    }
-
-    fn cancel_started_attempt(
-        &self,
-        connection: &Arc<dyn ConnectionControl>,
-        connection_revision: u64,
-        attempt: LoginAttempt,
-        status: AccountStatus,
-    ) -> AccountStatus {
-        if self.cancel_login(connection, &attempt.login_id).is_ok() {
-            self.clear_attempt(&attempt.login_id);
-            return self.set_status_for_connection(connection_revision, status);
-        }
-        if self.install_attempt(connection_revision, attempt, status) {
-            return self.status();
-        }
-        self.status()
-    }
-
-    fn clear_attempt(&self, login_id: &str) {
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if state
-            .login_attempt
-            .as_ref()
-            .is_some_and(|attempt| attempt.login_id == login_id)
-        {
-            state.login_attempt = None;
-            state.refresh_revision = state.refresh_revision.wrapping_add(1);
-            state.status = AccountStatus::Checking;
-        }
     }
 
     fn set_status_for_connection(
@@ -393,6 +369,7 @@ impl AccountService {
 
 mod account_actions;
 mod device_code;
+mod login_completion;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -484,3 +461,7 @@ mod device_code_tests;
 #[cfg(test)]
 #[path = "service/account_actions_tests.rs"]
 mod account_actions_tests;
+
+#[cfg(test)]
+#[path = "service/login_completion_tests.rs"]
+mod login_completion_tests;

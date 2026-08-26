@@ -35,7 +35,7 @@ pub(crate) trait ConnectionControl: Send + Sync {
 ///
 /// Implementations should return promptly and must decide which normalized
 /// state, if any, is safe to expose outside the backend.
-pub(super) trait NotificationObserver: Send + Sync {
+pub(crate) trait NotificationObserver: Send + Sync {
     fn on_notification(&self, method: &str, params: &Value);
 }
 
