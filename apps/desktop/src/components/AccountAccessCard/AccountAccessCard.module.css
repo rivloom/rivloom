@@ -250,10 +250,11 @@
 .detailPanel dd {
   margin: 0;
   font-weight: 620;
+  overflow-wrap: anywhere;
 }
 
 .verificationUrl {
-  font-size: 13px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
