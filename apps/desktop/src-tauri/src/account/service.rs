@@ -261,8 +261,7 @@ impl AccountService {
                 "account/login/start",
                 json!({
                     "type": "chatgpt",
-                    "useHostedLoginSuccessPage": true,
-                    "appBrand": "chatgpt",
+                    "useHostedLoginSuccessPage": false,
                 }),
             )
             .ok()

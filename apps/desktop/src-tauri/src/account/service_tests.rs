@@ -788,8 +788,7 @@ pub(super) fn browser_start_request() -> RecordedRequest {
         "account/login/start",
         json!({
             "type": "chatgpt",
-            "useHostedLoginSuccessPage": true,
-            "appBrand": "chatgpt",
+            "useHostedLoginSuccessPage": false,
         }),
     )
 }
