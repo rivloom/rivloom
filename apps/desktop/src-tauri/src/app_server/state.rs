@@ -6,6 +6,7 @@ use std::sync::PoisonError;
 use tauri::AppHandle;
 use tauri::Emitter;
 
+use crate::account::AccountService;
 use crate::app_server::process::AppServerSupervisor;
 use crate::app_server::process::StatusObserver;
 use crate::app_server::transport::TauriProcessLauncher;
@@ -22,17 +23,21 @@ pub(crate) struct AppServerState {
 }
 
 impl AppServerState {
-    pub(crate) fn new(app_handle: AppHandle, codex_home: PathBuf) -> Self {
+    pub(crate) fn new(
+        app_handle: AppHandle,
+        codex_home: PathBuf,
+        account_service: AccountService,
+    ) -> Self {
         let status = Arc::new(RuntimeStatusStore::new(app_handle.clone()));
         let observer: Arc<dyn StatusObserver> = status.clone();
         let launcher = Box::new(TauriProcessLauncher::new(app_handle, codex_home));
+        let account_service = Arc::new(account_service);
+        let mut supervisor = AppServerSupervisor::new(launcher, observer, INITIALIZATION_TIMEOUT);
+        supervisor.set_notification_observer(account_service.clone());
+        supervisor.set_connection_observer(account_service);
 
         Self {
-            supervisor: Mutex::new(AppServerSupervisor::new(
-                launcher,
-                observer,
-                INITIALIZATION_TIMEOUT,
-            )),
+            supervisor: Mutex::new(supervisor),
             status,
         }
     }

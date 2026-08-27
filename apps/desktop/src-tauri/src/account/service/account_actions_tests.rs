@@ -290,18 +290,18 @@ fn account_read_request() -> RecordedRequest {
     request("account/read", json!({ "refreshToken": false }))
 }
 
-fn device_start_request() -> RecordedRequest {
+pub(super) fn device_start_request() -> RecordedRequest {
     request(
         "account/login/start",
         json!({ "type": "chatgptDeviceCode" }),
     )
 }
 
-fn cancel_request(login_id: &str) -> RecordedRequest {
+pub(super) fn cancel_request(login_id: &str) -> RecordedRequest {
     request("account/login/cancel", json!({ "loginId": login_id }))
 }
 
-fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
+pub(super) fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
     Ok(json!({
         "type": "chatgptDeviceCode",
         "loginId": login_id,
@@ -310,11 +310,11 @@ fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
     }))
 }
 
-fn cancel_response() -> Result<Value, ConnectionError> {
+pub(super) fn cancel_response() -> Result<Value, ConnectionError> {
     Ok(json!({ "status": "canceled" }))
 }
 
-fn signed_out_response() -> Result<Value, ConnectionError> {
+pub(super) fn signed_out_response() -> Result<Value, ConnectionError> {
     Ok(json!({ "account": null, "requiresOpenaiAuth": true }))
 }
 

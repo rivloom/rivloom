@@ -27,9 +27,19 @@ pub(super) trait StatusObserver: Send + Sync {
     fn on_status(&self, status: &RuntimeStatus);
 }
 
+/// Observes availability of the active App Server connection.
+///
+/// Implementations receive a connected handle before the connected runtime status is published,
+/// and are disconnected before the corresponding stopped or error status is published.
+pub(crate) trait ConnectionObserver: Send + Sync {
+    fn on_connected(&self, connection: Arc<dyn crate::app_server::ConnectionControl>);
+    fn on_disconnected(&self);
+}
+
 pub(crate) struct AppServerSupervisor {
     launcher: Box<dyn ProcessLauncher>,
     observer: Arc<dyn StatusObserver>,
+    connection_observer: Option<Arc<dyn ConnectionObserver>>,
     notification_observer: Option<Arc<dyn NotificationObserver>>,
     lifecycle: Arc<Mutex<LifecycleState>>,
     reader: Option<ReaderTask>,
@@ -66,6 +76,7 @@ impl AppServerSupervisor {
         Self {
             launcher,
             observer,
+            connection_observer: None,
             notification_observer: None,
             lifecycle: Arc::new(Mutex::new(LifecycleState {
                 status,
@@ -124,6 +135,7 @@ impl AppServerSupervisor {
         self.transition(RuntimeStatus::Stopped)
     }
 
+    #[cfg(test)]
     pub(super) fn connection(&self) -> Option<AppServerConnection> {
         self.lifecycle
             .lock()
@@ -143,6 +155,21 @@ impl AppServerSupervisor {
             .as_ref()
         {
             active.connection.set_notification_observer(observer);
+        }
+    }
+
+    pub(crate) fn set_connection_observer(&mut self, observer: Arc<dyn ConnectionObserver>) {
+        self.connection_observer = Some(observer.clone());
+        let connection = {
+            self.lifecycle
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .active
+                .as_ref()
+                .map(|active| active.connection.clone())
+        };
+        if let Some(connection) = connection {
+            observer.on_connected(Arc::new(connection));
         }
     }
 
@@ -189,10 +216,14 @@ impl AppServerSupervisor {
             });
             generation
         };
+        if let Some(observer) = &self.connection_observer {
+            observer.on_connected(Arc::new(connection.clone()));
+        }
         self.observer.on_status(&status);
 
         let lifecycle = self.lifecycle.clone();
         let observer = self.observer.clone();
+        let connection_observer = self.connection_observer.clone();
         let reader_stop = stop.clone();
         let reader = thread::Builder::new()
             .name("rivloom-app-server-reader".to_string())
@@ -202,6 +233,7 @@ impl AppServerSupervisor {
                     connection,
                     lifecycle,
                     observer,
+                    connection_observer,
                     generation,
                     reader_stop,
                 );
@@ -216,6 +248,7 @@ impl AppServerSupervisor {
                 fail_active_connection(
                     &self.lifecycle,
                     &self.observer,
+                    &self.connection_observer,
                     generation,
                     "reader start failed",
                     &error.to_string(),
@@ -258,6 +291,9 @@ impl AppServerSupervisor {
         if let Some(active) = active {
             active.stop.store(true, Ordering::Release);
             active.connection.disconnect();
+            if let Some(observer) = &self.connection_observer {
+                observer.on_disconnected();
+            }
             if let Err(error) = active.control.terminate() {
                 log_diagnostic(context, &error);
             }
@@ -286,6 +322,7 @@ fn read_messages(
     connection: AppServerConnection,
     lifecycle: Arc<Mutex<LifecycleState>>,
     observer: Arc<dyn StatusObserver>,
+    connection_observer: Option<Arc<dyn ConnectionObserver>>,
     generation: u64,
     stop: Arc<AtomicBool>,
 ) {
@@ -299,6 +336,7 @@ fn read_messages(
                 fail_active_connection(
                     &lifecycle,
                     &observer,
+                    &connection_observer,
                     generation,
                     "connection lost",
                     &detail,
@@ -314,6 +352,7 @@ fn read_messages(
                 fail_active_connection(
                     &lifecycle,
                     &observer,
+                    &connection_observer,
                     generation,
                     "protocol read failed",
                     &error.to_string(),
@@ -326,6 +365,7 @@ fn read_messages(
             fail_active_connection(
                 &lifecycle,
                 &observer,
+                &connection_observer,
                 generation,
                 "protocol routing failed",
                 &error.to_string(),
@@ -341,6 +381,7 @@ fn read_messages(
 fn fail_active_connection(
     lifecycle: &Mutex<LifecycleState>,
     observer: &Arc<dyn StatusObserver>,
+    connection_observer: &Option<Arc<dyn ConnectionObserver>>,
     generation: u64,
     context: &str,
     detail: &str,
@@ -364,6 +405,9 @@ fn fail_active_connection(
     if let Some(active) = active {
         active.stop.store(true, Ordering::Release);
         active.connection.disconnect();
+        if let Some(observer) = connection_observer {
+            observer.on_disconnected();
+        }
         if terminate && let Err(error) = active.control.terminate() {
             log_diagnostic("connection cleanup failed", &error);
         }
