@@ -17,6 +17,7 @@ use crate::account::login::UrlOpener;
 use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
+use crate::app_server::ConnectionIdentity;
 
 #[test]
 fn account_read_maps_supported_and_unsupported_configurations() {
@@ -125,6 +126,7 @@ fn a_late_read_from_an_old_connection_cannot_overwrite_reconnected_state() {
     let (started_sender, started_receiver) = mpsc::channel();
     let (response_sender, response_receiver) = mpsc::channel();
     service.connect(Arc::new(BlockingConnection {
+        identity: ConnectionIdentity::new(),
         started_sender,
         response_receiver: Mutex::new(response_receiver),
     }));
@@ -177,7 +179,10 @@ fn a_late_read_from_an_old_connection_cannot_overwrite_reconnected_state() {
 fn an_older_read_on_the_same_connection_cannot_overwrite_a_newer_result() {
     let service = AccountService::new();
     let (request_sender, request_receiver) = mpsc::channel();
-    service.connect(Arc::new(ControlledConnection { request_sender }));
+    service.connect(Arc::new(ControlledConnection {
+        identity: ConnectionIdentity::new(),
+        request_sender,
+    }));
 
     let first_service = service.clone();
     let first_read = thread::spawn(move || first_service.refresh());
@@ -486,7 +491,10 @@ pub(super) fn controlled_browser_service() -> (
     let opener = Arc::new(FakeUrlOpener::new(vec![]));
     let service = AccountService::with_url_opener(opener.clone());
     let (request_sender, request_receiver) = mpsc::channel();
-    service.connect(Arc::new(ControlledConnection { request_sender }));
+    service.connect(Arc::new(ControlledConnection {
+        identity: ConnectionIdentity::new(),
+        request_sender,
+    }));
     (service, opener, request_receiver)
 }
 
@@ -570,6 +578,7 @@ pub(super) struct RecordedRequest {
 const OMITTED_PARAMS_SENTINEL: &str = "__omitted_params__";
 
 pub(super) struct FakeConnection {
+    identity: ConnectionIdentity,
     responses: Mutex<VecDeque<Result<Value, ConnectionError>>>,
     requests: Mutex<Vec<RecordedRequest>>,
 }
@@ -577,6 +586,7 @@ pub(super) struct FakeConnection {
 impl FakeConnection {
     pub(super) fn new(responses: Vec<Result<Value, ConnectionError>>) -> Self {
         Self {
+            identity: ConnectionIdentity::new(),
             responses: Mutex::new(responses.into()),
             requests: Mutex::new(Vec::new()),
         }
@@ -591,6 +601,10 @@ impl FakeConnection {
 }
 
 impl ConnectionControl for FakeConnection {
+    fn connection_identity(&self) -> ConnectionIdentity {
+        self.identity.clone()
+    }
+
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError> {
         self.requests
             .lock()
@@ -608,6 +622,7 @@ impl ConnectionControl for FakeConnection {
 }
 
 struct BlockingConnection {
+    identity: ConnectionIdentity,
     started_sender: mpsc::Sender<()>,
     response_receiver: Mutex<mpsc::Receiver<Result<Value, ConnectionError>>>,
 }
@@ -629,6 +644,7 @@ impl ControlledRequest {
 }
 
 struct ControlledConnection {
+    identity: ConnectionIdentity,
     request_sender: mpsc::Sender<ControlledRequest>,
 }
 
@@ -690,6 +706,10 @@ impl UrlOpener for FakeUrlOpener {
 }
 
 impl ConnectionControl for ControlledConnection {
+    fn connection_identity(&self) -> ConnectionIdentity {
+        self.identity.clone()
+    }
+
     fn request(&self, method: &str, params: Value) -> Result<Value, ConnectionError> {
         let (response_sender, response_receiver) = mpsc::channel();
         self.request_sender
@@ -707,6 +727,10 @@ impl ConnectionControl for ControlledConnection {
 }
 
 impl ConnectionControl for BlockingConnection {
+    fn connection_identity(&self) -> ConnectionIdentity {
+        self.identity.clone()
+    }
+
     fn request(&self, _method: &str, _params: Value) -> Result<Value, ConnectionError> {
         self.started_sender.send(()).unwrap();
         self.response_receiver

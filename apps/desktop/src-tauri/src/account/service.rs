@@ -15,8 +15,10 @@ use crate::account::login::parse_official_auth_url;
 use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
+use crate::app_server::ConnectionIdentity;
 
 use self::login_completion::LoginCompletionState;
+use self::login_completion::StartedAttemptDisposition;
 use self::login_completion::TaskSpawner;
 use self::login_completion::ThreadTaskSpawner;
 
@@ -40,6 +42,7 @@ struct AccountServiceInner {
 
 struct AccountServiceState {
     connection: Option<Arc<dyn ConnectionControl>>,
+    connection_identity: Option<ConnectionIdentity>,
     connection_revision: u64,
     login_completion: LoginCompletionState,
     login_attempt: Option<LoginAttempt>,
@@ -90,6 +93,7 @@ impl AccountService {
                 login_operation: Mutex::new(()),
                 state: Mutex::new(AccountServiceState {
                     connection: None,
+                    connection_identity: None,
                     connection_revision: 0,
                     login_completion: LoginCompletionState::default(),
                     login_attempt: None,
@@ -103,6 +107,7 @@ impl AccountService {
     }
 
     pub(crate) fn connect(&self, connection: Arc<dyn ConnectionControl>) -> AccountStatus {
+        let connection_identity = connection.connection_identity();
         let _browser_open = self
             .inner
             .browser_open_operation
@@ -115,6 +120,7 @@ impl AccountService {
             .unwrap_or_else(PoisonError::into_inner);
         state.connection_revision = state.connection_revision.wrapping_add(1);
         state.connection = Some(connection);
+        state.connection_identity = Some(connection_identity);
         state.login_completion.reset();
         state.login_attempt = None;
         state.status = AccountStatus::Checking;
@@ -134,6 +140,7 @@ impl AccountService {
             .unwrap_or_else(PoisonError::into_inner);
         state.connection_revision = state.connection_revision.wrapping_add(1);
         state.connection = None;
+        state.connection_identity = None;
         state.login_completion.reset();
         state.login_attempt = None;
         state.status = retryable_account_error();
@@ -222,6 +229,7 @@ impl AccountService {
             Some(LoginStartResponse::ChatgptDeviceCode { login_id, .. })
                 if !login_id.is_empty() =>
             {
+                self.discard_login_start(connection_revision);
                 return self.cancel_started_attempt(
                     &connection,
                     connection_revision,
@@ -235,11 +243,13 @@ impl AccountService {
             Some(LoginStartResponse::ChatgptDeviceCode { .. })
             | Some(LoginStartResponse::Unsupported)
             | None => {
+                self.discard_login_start(connection_revision);
                 return self
                     .set_status_for_connection(connection_revision, login_unavailable_error());
             }
         };
         if login_id.is_empty() {
+            self.discard_login_start(connection_revision);
             return self.set_status_for_connection(connection_revision, login_unavailable_error());
         }
         let attempt = LoginAttempt {
@@ -247,6 +257,7 @@ impl AccountService {
             kind: LoginAttemptKind::Browser,
         };
         let Some(auth_url) = parse_official_auth_url(&auth_url) else {
+            self.discard_login_start(connection_revision);
             return self.cancel_started_attempt(
                 &connection,
                 connection_revision,
@@ -259,14 +270,26 @@ impl AccountService {
             .browser_open_operation
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        if !self.install_attempt(
+        match self.finish_login_start_with_attempt(
             connection_revision,
             attempt.clone(),
             AccountStatus::BrowserPending,
         ) {
-            let status = self.status();
-            drop(browser_open);
-            return self.cancel_started_attempt(&connection, connection_revision, attempt, status);
+            StartedAttemptDisposition::Installed => {}
+            StartedAttemptDisposition::Completed => {
+                drop(browser_open);
+                return self.status();
+            }
+            StartedAttemptDisposition::Stale => {
+                let status = self.status();
+                drop(browser_open);
+                return self.cancel_started_attempt(
+                    &connection,
+                    connection_revision,
+                    attempt,
+                    status,
+                );
+            }
         }
         if self.inner.url_opener.open(&auth_url).is_err() {
             drop(browser_open);
@@ -294,7 +317,11 @@ impl AccountService {
             state.status = login_unavailable_error();
             return Err(state.status.clone());
         };
-        Ok((connection, state.connection_revision))
+        let connection_revision = state.connection_revision;
+        state
+            .login_completion
+            .begin_login_start(connection_revision);
+        Ok((connection, connection_revision))
     }
 
     fn cancel_active_attempt(&self) -> Result<(), AccountStatus> {

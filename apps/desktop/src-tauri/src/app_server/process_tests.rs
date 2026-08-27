@@ -16,6 +16,7 @@ use super::AppServerSupervisor;
 use super::StatusObserver;
 use crate::app_server::connection::ConnectionControl;
 use crate::app_server::connection::ConnectionError;
+use crate::app_server::connection::ConnectionIdentity;
 use crate::app_server::connection::NotificationObserver;
 use crate::app_server::protocol::initialize_request;
 use crate::app_server::protocol::initialized_notification;
@@ -389,7 +390,12 @@ impl RecordingNotificationObserver {
 }
 
 impl NotificationObserver for RecordingNotificationObserver {
-    fn on_notification(&self, method: &str, params: &Value) {
+    fn on_notification(
+        &self,
+        _connection_identity: &ConnectionIdentity,
+        method: &str,
+        params: &Value,
+    ) {
         self.notifications
             .lock()
             .unwrap()

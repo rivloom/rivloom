@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::PoisonError;
 use std::thread;
@@ -8,9 +9,13 @@ use super::AccountService;
 use super::LoginAttempt;
 use crate::account::types::AccountStatus;
 use crate::app_server::ConnectionControl;
+use crate::app_server::ConnectionIdentity;
 use crate::app_server::NotificationObserver;
 
 type BackgroundTask = Box<dyn FnOnce() + Send + 'static>;
+
+pub(super) const MAX_EARLY_COMPLETION_IDS: usize = 8;
+pub(super) const MAX_EARLY_COMPLETION_BYTES: usize = 4 * 1024;
 
 /// Starts short backend tasks without making notification callbacks wait for RPC work.
 ///
@@ -34,13 +39,88 @@ impl TaskSpawner for ThreadTaskSpawner {
 
 #[derive(Default)]
 pub(super) struct LoginCompletionState {
+    login_start: Option<LoginStartState>,
     refresh: BackgroundRefreshState,
 }
 
 impl LoginCompletionState {
     pub(super) fn reset(&mut self) {
+        self.login_start = None;
         self.refresh = BackgroundRefreshState::Idle;
     }
+
+    pub(super) fn begin_login_start(&mut self, connection_revision: u64) {
+        self.login_start = Some(LoginStartState {
+            connection_revision,
+            completion_bytes: 0,
+            completion_ids: VecDeque::new(),
+        });
+    }
+
+    fn remember_early_completion(&mut self, connection_revision: u64, login_id: &str) {
+        let Some(login_start) = &mut self.login_start else {
+            return;
+        };
+        if login_start.connection_revision != connection_revision
+            || login_id.is_empty()
+            || login_id.len() > MAX_EARLY_COMPLETION_BYTES
+        {
+            return;
+        }
+        if let Some(index) = login_start
+            .completion_ids
+            .iter()
+            .position(|completed_id| completed_id == login_id)
+            && let Some(existing) = login_start.completion_ids.remove(index)
+        {
+            login_start.completion_bytes -= existing.len();
+        }
+        while login_start.completion_ids.len() >= MAX_EARLY_COMPLETION_IDS
+            || login_start.completion_bytes > MAX_EARLY_COMPLETION_BYTES - login_id.len()
+        {
+            let Some(evicted) = login_start.completion_ids.pop_front() else {
+                break;
+            };
+            login_start.completion_bytes -= evicted.len();
+        }
+        login_start.completion_ids.push_back(login_id.to_string());
+        login_start.completion_bytes += login_id.len();
+    }
+
+    fn discard_login_start(&mut self, connection_revision: u64) {
+        if self
+            .login_start
+            .as_ref()
+            .is_some_and(|login_start| login_start.connection_revision == connection_revision)
+        {
+            self.login_start = None;
+        }
+    }
+
+    fn take_matching_early_completion(&mut self, connection_revision: u64, login_id: &str) -> bool {
+        let Some(login_start) = self
+            .login_start
+            .take_if(|login_start| login_start.connection_revision == connection_revision)
+        else {
+            return false;
+        };
+        login_start
+            .completion_ids
+            .iter()
+            .any(|completed_id| completed_id == login_id)
+    }
+}
+
+struct LoginStartState {
+    connection_revision: u64,
+    completion_bytes: usize,
+    completion_ids: VecDeque<String>,
+}
+
+pub(super) enum StartedAttemptDisposition {
+    Installed,
+    Completed,
+    Stale,
 }
 
 #[derive(Default)]
@@ -54,16 +134,74 @@ enum BackgroundRefreshState {
 }
 
 impl NotificationObserver for AccountService {
-    fn on_notification(&self, method: &str, params: &Value) {
+    fn on_notification(
+        &self,
+        connection_identity: &ConnectionIdentity,
+        method: &str,
+        params: &Value,
+    ) {
         match method {
-            "account/login/completed" => self.handle_login_completed(params),
-            "account/updated" => self.schedule_current_background_refresh(),
+            "account/login/completed" => {
+                self.handle_login_completed(connection_identity, params);
+            }
+            "account/updated" => {
+                self.schedule_current_background_refresh(connection_identity);
+            }
             _ => {}
         }
     }
 }
 
 impl AccountService {
+    pub(super) fn discard_login_start(&self, connection_revision: u64) {
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        state
+            .login_completion
+            .discard_login_start(connection_revision);
+    }
+
+    pub(super) fn finish_login_start_with_attempt(
+        &self,
+        connection_revision: u64,
+        attempt: LoginAttempt,
+        status: AccountStatus,
+    ) -> StartedAttemptDisposition {
+        let disposition = {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if state.connection_revision != connection_revision || state.connection.is_none() {
+                state
+                    .login_completion
+                    .discard_login_start(connection_revision);
+                StartedAttemptDisposition::Stale
+            } else if state
+                .login_completion
+                .take_matching_early_completion(connection_revision, &attempt.login_id)
+            {
+                state.login_attempt = None;
+                state.refresh_revision = state.refresh_revision.wrapping_add(1);
+                state.status = AccountStatus::Checking;
+                StartedAttemptDisposition::Completed
+            } else {
+                state.login_attempt = Some(attempt);
+                state.refresh_revision = state.refresh_revision.wrapping_add(1);
+                state.status = status;
+                StartedAttemptDisposition::Installed
+            }
+        };
+        if matches!(disposition, StartedAttemptDisposition::Completed) {
+            self.schedule_background_refresh(connection_revision);
+        }
+        disposition
+    }
+
     pub(super) fn install_attempt(
         &self,
         connection_revision: u64,
@@ -118,7 +256,7 @@ impl AccountService {
         }
     }
 
-    fn handle_login_completed(&self, params: &Value) {
+    fn handle_login_completed(&self, connection_identity: &ConnectionIdentity, params: &Value) {
         let Some(params) = params.as_object() else {
             return;
         };
@@ -139,7 +277,7 @@ impl AccountService {
                 .state
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
-            if state.connection.is_none() {
+            if state.connection_identity.as_ref() != Some(connection_identity) {
                 return;
             }
             if state
@@ -152,6 +290,10 @@ impl AccountService {
                 state.status = AccountStatus::Checking;
                 Some(state.connection_revision)
             } else {
+                let connection_revision = state.connection_revision;
+                state
+                    .login_completion
+                    .remember_early_completion(connection_revision, login_id);
                 None
             }
         };
@@ -160,14 +302,14 @@ impl AccountService {
         }
     }
 
-    fn schedule_current_background_refresh(&self) {
+    fn schedule_current_background_refresh(&self, connection_identity: &ConnectionIdentity) {
         let connection_revision = {
             let state = self
                 .inner
                 .state
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
-            if state.connection.is_none() {
+            if state.connection_identity.as_ref() != Some(connection_identity) {
                 return;
             }
             state.connection_revision

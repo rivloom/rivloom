@@ -5,6 +5,7 @@ use serde_json::json;
 use super::AccountService;
 use super::LoginAttempt;
 use super::LoginAttemptKind;
+use super::StartedAttemptDisposition;
 use super::login_unavailable_error;
 use crate::account::login::LoginStartResponse;
 use crate::account::login::parse_login_response;
@@ -38,6 +39,7 @@ impl AccountService {
                 user_code,
             }) => (login_id, verification_url, user_code),
             Some(LoginStartResponse::Chatgpt { login_id, .. }) if !login_id.is_empty() => {
+                self.discard_login_start(connection_revision);
                 return self.cancel_started_attempt(
                     &connection,
                     connection_revision,
@@ -51,14 +53,17 @@ impl AccountService {
             Some(LoginStartResponse::Chatgpt { .. })
             | Some(LoginStartResponse::Unsupported)
             | None => {
+                self.discard_login_start(connection_revision);
                 return self
                     .set_status_for_connection(connection_revision, login_unavailable_error());
             }
         };
         if login_id.is_empty() {
+            self.discard_login_start(connection_revision);
             return self.set_status_for_connection(connection_revision, login_unavailable_error());
         }
         let Some(verification_url) = parse_official_auth_url(&verification_url) else {
+            self.discard_login_start(connection_revision);
             return self.cancel_started_attempt(
                 &connection,
                 connection_revision,
@@ -70,6 +75,7 @@ impl AccountService {
             );
         };
         if user_code.trim().is_empty() {
+            self.discard_login_start(connection_revision);
             return self.cancel_started_attempt(
                 &connection,
                 connection_revision,
@@ -91,8 +97,11 @@ impl AccountService {
                 user_code,
             },
         };
-        if self.install_attempt(connection_revision, attempt.clone(), status) {
-            return self.status();
+        match self.finish_login_start_with_attempt(connection_revision, attempt.clone(), status) {
+            StartedAttemptDisposition::Installed | StartedAttemptDisposition::Completed => {
+                return self.status();
+            }
+            StartedAttemptDisposition::Stale => {}
         }
         let status = self.status();
         self.cancel_started_attempt(&connection, connection_revision, attempt, status)
