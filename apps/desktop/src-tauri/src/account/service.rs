@@ -2,8 +2,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 
-use serde::Deserialize;
-use serde_json::Value;
 use serde_json::json;
 use tauri::Url;
 
@@ -17,10 +15,15 @@ use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
 use crate::app_server::ConnectionIdentity;
 
+pub(crate) use self::commands::AccountCommand;
 use self::login_completion::LoginCompletionState;
 use self::login_completion::StartedAttemptDisposition;
 use self::login_completion::TaskSpawner;
 use self::login_completion::ThreadTaskSpawner;
+use self::read::parse_account_status;
+pub(crate) use self::status_observer::AccountStatusObserver;
+#[cfg(test)]
+use self::status_observer::NoopAccountStatusObserver;
 
 const ACCOUNT_UNAVAILABLE_MESSAGE: &str = "账号状态暂时不可用。";
 const BROWSER_OPEN_MESSAGE: &str = "无法打开 ChatGPT 登录页面，请尝试设备码登录。";
@@ -35,7 +38,9 @@ pub(crate) struct AccountService {
 struct AccountServiceInner {
     browser_open_operation: Mutex<()>,
     login_operation: Mutex<()>,
+    published_status: Mutex<Option<AccountStatus>>,
     state: Mutex<AccountServiceState>,
+    status_observer: Arc<dyn AccountStatusObserver>,
     task_spawner: Arc<dyn TaskSpawner>,
     url_opener: Arc<dyn UrlOpener>,
 }
@@ -66,8 +71,10 @@ enum LoginAttemptKind {
     },
 }
 
+#[cfg(test)]
 struct UnavailableUrlOpener;
 
+#[cfg(test)]
 impl UrlOpener for UnavailableUrlOpener {
     fn open(&self, _url: &Url) -> Result<(), ()> {
         Err(())
@@ -75,22 +82,45 @@ impl UrlOpener for UnavailableUrlOpener {
 }
 
 impl AccountService {
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::with_url_opener(Arc::new(UnavailableUrlOpener))
     }
 
+    #[cfg(test)]
     pub(crate) fn with_url_opener(url_opener: Arc<dyn UrlOpener>) -> Self {
         Self::with_dependencies(url_opener, Arc::new(ThreadTaskSpawner))
     }
 
+    pub(crate) fn with_runtime_dependencies(
+        url_opener: Arc<dyn UrlOpener>,
+        status_observer: Arc<dyn AccountStatusObserver>,
+    ) -> Self {
+        Self::with_all_dependencies(url_opener, Arc::new(ThreadTaskSpawner), status_observer)
+    }
+
+    #[cfg(test)]
     fn with_dependencies(
         url_opener: Arc<dyn UrlOpener>,
         task_spawner: Arc<dyn TaskSpawner>,
+    ) -> Self {
+        Self::with_all_dependencies(
+            url_opener,
+            task_spawner,
+            Arc::new(NoopAccountStatusObserver),
+        )
+    }
+
+    fn with_all_dependencies(
+        url_opener: Arc<dyn UrlOpener>,
+        task_spawner: Arc<dyn TaskSpawner>,
+        status_observer: Arc<dyn AccountStatusObserver>,
     ) -> Self {
         Self {
             inner: Arc::new(AccountServiceInner {
                 browser_open_operation: Mutex::new(()),
                 login_operation: Mutex::new(()),
+                published_status: Mutex::new(None),
                 state: Mutex::new(AccountServiceState {
                     connection: None,
                     connection_identity: None,
@@ -100,6 +130,7 @@ impl AccountService {
                     refresh_revision: 0,
                     status: AccountStatus::Checking,
                 }),
+                status_observer,
                 task_spawner,
                 url_opener,
             }),
@@ -113,18 +144,22 @@ impl AccountService {
             .browser_open_operation
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        state.connection_revision = state.connection_revision.wrapping_add(1);
-        state.connection = Some(connection);
-        state.connection_identity = Some(connection_identity);
-        state.login_completion.reset();
-        state.login_attempt = None;
-        state.status = AccountStatus::Checking;
-        state.status.clone()
+        let status = {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            state.connection_revision = state.connection_revision.wrapping_add(1);
+            state.connection = Some(connection);
+            state.connection_identity = Some(connection_identity);
+            state.login_completion.reset();
+            state.login_attempt = None;
+            state.status = AccountStatus::Checking;
+            state.status.clone()
+        };
+        self.publish_status(&status);
+        status
     }
 
     pub(crate) fn disconnect(&self) -> AccountStatus {
@@ -133,18 +168,22 @@ impl AccountService {
             .browser_open_operation
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        state.connection_revision = state.connection_revision.wrapping_add(1);
-        state.connection = None;
-        state.connection_identity = None;
-        state.login_completion.reset();
-        state.login_attempt = None;
-        state.status = retryable_account_error();
-        state.status.clone()
+        let status = {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            state.connection_revision = state.connection_revision.wrapping_add(1);
+            state.connection = None;
+            state.connection_identity = None;
+            state.login_completion.reset();
+            state.login_attempt = None;
+            state.status = retryable_account_error();
+            state.status.clone()
+        };
+        self.publish_status(&status);
+        status
     }
 
     pub(crate) fn status(&self) -> AccountStatus {
@@ -189,18 +228,22 @@ impl AccountService {
             None => retryable_account_error(),
         };
 
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if state.connection_revision == connection_revision
-            && state.refresh_revision == refresh_revision
-            && state.login_attempt.is_none()
-        {
-            state.status = next_status;
-        }
-        state.status.clone()
+        let status = {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if state.connection_revision == connection_revision
+                && state.refresh_revision == refresh_revision
+                && state.login_attempt.is_none()
+            {
+                state.status = next_status;
+            }
+            state.status.clone()
+        };
+        self.publish_status(&status);
+        status
     }
 
     pub(crate) fn start_browser_login(&self) -> AccountStatus {
@@ -395,59 +438,11 @@ impl AccountService {
 }
 
 mod account_actions;
+mod commands;
 mod device_code;
 mod login_completion;
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AccountReadResponse {
-    account: Value,
-    requires_openai_auth: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-enum AccountPayload {
-    Chatgpt {
-        email: Value,
-        plan_type: String,
-    },
-    #[serde(other)]
-    Unsupported,
-}
-
-fn parse_account_status(result: Value) -> AccountStatus {
-    let Ok(response) = serde_json::from_value::<AccountReadResponse>(result) else {
-        return retryable_account_error();
-    };
-
-    if response.account.is_null() {
-        return if response.requires_openai_auth {
-            AccountStatus::SignedOut
-        } else {
-            unsupported_account_error()
-        };
-    }
-
-    let Ok(account) = serde_json::from_value::<AccountPayload>(response.account) else {
-        return retryable_account_error();
-    };
-    match account {
-        AccountPayload::Chatgpt { email, plan_type } => {
-            let email = match email {
-                Value::Null => None,
-                Value::String(email) => Some(email),
-                _ => return retryable_account_error(),
-            };
-            AccountStatus::SignedIn { email, plan_type }
-        }
-        AccountPayload::Unsupported => unsupported_account_error(),
-    }
-}
+mod read;
+mod status_observer;
 
 fn retryable_account_error() -> AccountStatus {
     AccountStatus::Error {
@@ -492,3 +487,11 @@ mod account_actions_tests;
 #[cfg(test)]
 #[path = "service/login_completion_tests.rs"]
 mod login_completion_tests;
+
+#[cfg(test)]
+#[path = "service/commands_tests.rs"]
+mod commands_tests;
+
+#[cfg(test)]
+#[path = "service/status_observer_tests.rs"]
+mod status_observer_tests;

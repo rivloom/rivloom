@@ -13,6 +13,7 @@ use serde_json::Value;
 use serde_json::json;
 
 use super::AppServerSupervisor;
+use super::ConnectionObserver;
 use super::StatusObserver;
 use crate::app_server::connection::ConnectionControl;
 use crate::app_server::connection::ConnectionError;
@@ -28,6 +29,50 @@ use crate::runtime_status::RuntimeStatus;
 
 const STARTUP_ERROR_MESSAGE: &str = "核心服务暂时无法启动。";
 const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 1);
+
+#[test]
+fn account_connection_lifecycle_precedes_runtime_status_events() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let status_observer = Arc::new(OrderedStatusObserver {
+        events: events.clone(),
+    });
+    let connection_observer = Arc::new(OrderedConnectionObserver {
+        events: events.clone(),
+    });
+    let (process, handle) = FakeProcess::with_response(success_response());
+    let mut supervisor = AppServerSupervisor::new(
+        Box::new(FakeLauncher::with_attempts([Ok(process)])),
+        status_observer,
+        Duration::from_millis(/*millis*/ 5),
+    );
+    events.lock().unwrap().clear();
+    supervisor.set_connection_observer(connection_observer);
+
+    assert_eq!(supervisor.start(), connected_status());
+    assert_eq!(
+        *events.lock().unwrap(),
+        vec![
+            "status:starting",
+            "connection:connected",
+            "status:connected"
+        ]
+    );
+
+    handle
+        .send_event(TransportEvent::Terminated(Some(1)))
+        .unwrap();
+    wait_until(|| events.lock().unwrap().last() == Some(&"status:error"));
+    assert_eq!(
+        *events.lock().unwrap(),
+        vec![
+            "status:starting",
+            "connection:connected",
+            "status:connected",
+            "connection:disconnected",
+            "status:error",
+        ]
+    );
+}
 
 #[test]
 fn successful_start_transitions_from_stopped_through_starting_to_connected() {
@@ -375,6 +420,36 @@ impl RecordingObserver {
 impl StatusObserver for RecordingObserver {
     fn on_status(&self, status: &RuntimeStatus) {
         self.statuses.lock().unwrap().push(status.clone());
+    }
+}
+
+struct OrderedStatusObserver {
+    events: Arc<Mutex<Vec<&'static str>>>,
+}
+
+impl StatusObserver for OrderedStatusObserver {
+    fn on_status(&self, status: &RuntimeStatus) {
+        let event = match status {
+            RuntimeStatus::Starting => "status:starting",
+            RuntimeStatus::Connected { .. } => "status:connected",
+            RuntimeStatus::Error { .. } => "status:error",
+            RuntimeStatus::Stopped => "status:stopped",
+        };
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+struct OrderedConnectionObserver {
+    events: Arc<Mutex<Vec<&'static str>>>,
+}
+
+impl ConnectionObserver for OrderedConnectionObserver {
+    fn on_connected(&self, _connection: Arc<dyn ConnectionControl>) {
+        self.events.lock().unwrap().push("connection:connected");
+    }
+
+    fn on_disconnected(&self) {
+        self.events.lock().unwrap().push("connection:disconnected");
     }
 }
 

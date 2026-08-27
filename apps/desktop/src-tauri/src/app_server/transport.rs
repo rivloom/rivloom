@@ -190,7 +190,7 @@ impl ProcessControl for TauriProcessControl {
     }
 }
 
-pub(super) fn log_diagnostic(context: &str, detail: &str) {
+pub(crate) fn log_diagnostic(context: &str, detail: &str) {
     let detail = detail
         .chars()
         .take(MAX_DIAGNOSTIC_CHARS)
