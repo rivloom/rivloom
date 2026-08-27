@@ -1,15 +1,18 @@
+import { AccountAccessCard } from "../components/AccountAccessCard/AccountAccessCard";
 import { AppShell } from "../components/AppShell/AppShell";
 import { ServiceStatusCard } from "../components/ServiceStatusCard/ServiceStatusCard";
 import { zhCN } from "../content/zh-CN";
+import { useAccountStatus } from "../hooks/useAccountStatus";
 import { useRuntimeStatus } from "../hooks/useRuntimeStatus";
 
 import styles from "./App.module.css";
 
 export function App() {
-  const { retry, retrying, status } = useRuntimeStatus();
+  const { retry, retrying, status: runtimeStatus } = useRuntimeStatus();
+  const account = useAccountStatus(runtimeStatus.state === "connected");
 
   return (
-    <AppShell runtimeStatus={status}>
+    <AppShell runtimeStatus={runtimeStatus}>
       <div className={styles.page}>
         <section className={styles.intro} aria-labelledby="overview-title">
           <div>
@@ -29,11 +32,24 @@ export function App() {
           </aside>
         </section>
 
-        <ServiceStatusCard
-          status={status}
-          onRetry={retry}
-          retrying={retrying}
-        />
+        <div className={styles.cards}>
+          <ServiceStatusCard
+            status={runtimeStatus}
+            onRetry={retry}
+            retrying={retrying}
+          />
+          <AccountAccessCard
+            runtimeConnected={runtimeStatus.state === "connected"}
+            status={account.status}
+            pendingAction={account.pendingAction}
+            onRefresh={account.refresh}
+            onStartChatgptLogin={account.beginChatgptLogin}
+            onStartDeviceCodeLogin={account.beginDeviceCodeLogin}
+            onCancelLogin={account.cancelLogin}
+            onLogout={account.logout}
+            onOpenDeviceVerification={account.openVerification}
+          />
+        </div>
       </div>
     </AppShell>
   );
