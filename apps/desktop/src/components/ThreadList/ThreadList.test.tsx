@@ -126,7 +126,7 @@ describe("ThreadList", () => {
     });
 
     const activeButton = screen.getByRole("button", {
-      name: "查看会话 修复登录回归，当前会话",
+      name: "查看会话 修复登录回归，状态进行中，当前会话",
     });
     expect(activeButton).toHaveAttribute("aria-current", "true");
     expect(screen.getByText("进行中")).toBeInTheDocument();
@@ -142,7 +142,9 @@ describe("ThreadList", () => {
     expect(callbacks.onSelect).toHaveBeenCalledWith(activeThread);
     await user.tab();
     expect(
-      screen.getByRole("button", { name: "查看会话 整理设置页" }),
+      screen.getByRole("button", {
+        name: "查看会话 整理设置页，状态可继续",
+      }),
     ).toHaveFocus();
     expect(listSnapshot()).toMatchSnapshot("populated thread list");
   });
@@ -152,7 +154,7 @@ describe("ThreadList", () => {
     const pending = renderThreadList({
       state: {
         state: "ready",
-        threads: [activeThread],
+        threads: [activeThread, unnamedThread],
         nextCursor: "next-page",
       },
       listAction: "loadMore",
@@ -162,8 +164,25 @@ describe("ThreadList", () => {
     expect(loadMore).toBeDisabled();
     expect(loadMore).toHaveAttribute("aria-busy", "true");
     expect(
-      screen.getByRole("button", { name: "查看会话 修复登录回归" }),
+      screen.getByRole("button", {
+        name: "查看会话 修复登录回归，状态进行中",
+      }),
     ).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "查看会话 整理设置页，状态可继续",
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "查看会话 修复登录回归，状态进行中",
+      }),
+    ).toHaveAttribute("aria-busy", "true");
+    expect(
+      screen.getByRole("button", {
+        name: "查看会话 整理设置页，状态可继续",
+      }),
+    ).toHaveAttribute("aria-busy", "false");
 
     pending.unmount();
     const available = renderThreadList({
@@ -176,6 +195,20 @@ describe("ThreadList", () => {
     await user.click(screen.getByRole("button", { name: "加载更多会话" }));
     expect(available.onLoadMore).toHaveBeenCalledOnce();
     available.unmount();
+
+    const belowBound = renderThreadList({
+      state: {
+        state: "ready",
+        threads: Array.from({ length: 499 }, (_, index) => ({
+          ...activeThread,
+          id: `thread-${index}`,
+        })),
+        nextCursor: "last-page",
+      },
+    });
+    await user.click(screen.getByRole("button", { name: "加载更多会话" }));
+    expect(belowBound.onLoadMore).toHaveBeenCalledOnce();
+    belowBound.unmount();
 
     renderThreadList({
       state: {

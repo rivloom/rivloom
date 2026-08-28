@@ -94,13 +94,18 @@ export function ThreadList({
               const title = titleOf(thread);
               const selected = thread.id === selectedThreadId;
               const reading = thread.id === readingThreadId;
+              const statusLabel = statusLabels[thread.status];
               const timestamp = thread.recencyAt ?? thread.updatedAt;
               return (
                 <li key={thread.id} className={styles.row}>
                   <button
                     className={styles.threadButton}
                     type="button"
-                    aria-label={zhCN.thread.actions.read(title, selected)}
+                    aria-label={zhCN.thread.actions.read(
+                      title,
+                      statusLabel,
+                      selected,
+                    )}
                     aria-current={selected ? "true" : undefined}
                     aria-busy={reading}
                     disabled={readingThreadId !== null}
@@ -121,7 +126,7 @@ export function ThreadList({
                           className={styles.status}
                           data-status={thread.status}
                         >
-                          {statusLabels[thread.status]}
+                          {statusLabel}
                         </span>
                       </span>
                       {thread.name?.trim() ? (

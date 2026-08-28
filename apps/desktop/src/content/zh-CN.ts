@@ -83,8 +83,8 @@ export const zhCN = {
       active: "进行中",
     },
     actions: {
-      read: (title: string, selected: boolean) =>
-        `查看会话 ${title}${selected ? "，当前会话" : ""}`,
+      read: (title: string, status: string, selected: boolean) =>
+        `查看会话 ${title}，状态${status}${selected ? "，当前会话" : ""}`,
       retry: "重新加载会话",
       loadMore: "加载更多会话",
       loadingMore: "正在加载更多…",
