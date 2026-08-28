@@ -151,12 +151,14 @@ export function useRecentProjects(enabled: boolean) {
       await runAction(
         { type: "remove", projectId },
         () => removeRecentProject(projectId),
-        () =>
+        () => {
+          setWarning(null);
           setState((current) =>
             projectsState(
               projectsOf(current).filter((project) => project.id !== projectId),
             ),
-          ),
+          );
+        },
       );
     },
     [runAction],

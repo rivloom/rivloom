@@ -99,9 +99,42 @@ describe("useRecentProjects", () => {
     expect(result.current.state).toEqual(ready([projectB, projectA]));
     expect(result.current.warning).toBe("recentProjectsNotSaved");
 
+    await act(async () => result.current.remove(projectB.id));
+    expect(result.current.state).toEqual(ready([projectA]));
+    expect(result.current.warning).toBeNull();
+
     bridgeMocks.selectProject.mockResolvedValue(null);
     await act(async () => result.current.select());
-    expect(result.current.state).toEqual(ready([projectB, projectA]));
+    expect(result.current.state).toEqual(ready([projectA]));
+  });
+
+  it("moves reopened projects first without duplicates and keeps 20 entries", async () => {
+    const projects = Array.from({ length: 20 }, (_, index) => ({
+      ...projectA,
+      id: `project-${index}`,
+      name: `project-${index}`,
+      lastOpenedAt: index,
+    }));
+    const reopened = { ...projects[10], lastOpenedAt: 100 };
+    const newest = { ...projectB, id: "project-new", lastOpenedAt: 101 };
+    bridgeMocks.listRecentProjects.mockResolvedValue(projects);
+    bridgeMocks.selectProject
+      .mockResolvedValueOnce({ project: reopened, warning: null })
+      .mockResolvedValueOnce({ project: newest, warning: null });
+    const { result } = renderHook(() => useRecentProjects(true));
+    await waitFor(() => expect(result.current.state).toEqual(ready(projects)));
+
+    await act(async () => result.current.select());
+    const reopenedProjects = [
+      reopened,
+      ...projects.filter((project) => project.id !== reopened.id),
+    ];
+    expect(result.current.state).toEqual(ready(reopenedProjects));
+
+    await act(async () => result.current.select());
+    expect(result.current.state).toEqual(
+      ready([newest, ...reopenedProjects].slice(0, 20)),
+    );
   });
 
   it("replaces on refresh and removes by opaque project ID", async () => {
