@@ -10,6 +10,10 @@ export const zhCN = {
     stageLabel: "当前阶段",
     stageTitle: "账号接入",
     stageDescription: "建立 ChatGPT 登录、恢复和退出的安全桌面流程。",
+    projectStage: {
+      title: "本地项目与会话",
+      description: "选择本地目录，安全恢复最近项目与项目会话。",
+    },
   },
   overview: {
     eyebrow: "Rivloom Desktop",
@@ -19,6 +23,49 @@ export const zhCN = {
     privacyLabel: "凭据留在本地服务",
     privacyDescription:
       "登录凭据由独立 App Server 保存，界面只接收脱敏账号状态。",
+  },
+  projectOverview: {
+    eyebrow: "Rivloom Local",
+    title: "从一个本地项目继续工作",
+    description:
+      "选择已有目录或重新打开最近项目。这里只登记目录元数据，不扫描文件，也不会自动发送模型请求。",
+    privacyLabel: "项目内容保持原位",
+    privacyDescription:
+      "Rivloom 只保存有界的路径与会话摘要；打开项目不会创建模型 turn。",
+  },
+  project: {
+    eyebrow: "Local workspace",
+    title: "本地项目",
+    description: "从系统目录选择器登记项目，或继续最近打开的工作目录。",
+    activeLabel: "当前项目",
+    actions: {
+      select: "打开本地项目",
+      refresh: "重新加载",
+      open: (name: string) => `打开项目 ${name}`,
+      remove: (name: string) => `从最近项目移除 ${name}`,
+      removeShort: "移除",
+    },
+    recent: {
+      title: "最近项目",
+      description: "最多保留 20 个已登记目录",
+      count: (count: number) => `${count} / 20`,
+      lastOpened: "最近打开",
+    },
+    loading: {
+      title: "正在读取最近项目…",
+      description: "Rivloom 正在读取本地保存的项目元数据。",
+    },
+    empty: {
+      title: "还没有最近项目",
+      description: "使用上方按钮选择一个现有目录开始。",
+    },
+    availability: {
+      missing: "目录已不存在",
+      unreadable: "目录无法访问",
+    },
+    warning: {
+      recentProjectsNotSaved: "项目已打开，但最近项目未能保存。",
+    },
   },
   account: {
     eyebrow: "账号访问",
