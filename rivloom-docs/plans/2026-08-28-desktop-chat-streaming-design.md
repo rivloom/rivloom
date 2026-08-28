@@ -180,13 +180,16 @@ Rust 将 App Server item 归一化为有限 union：用户消息、助手消息�
 | 草稿 | 20 个、合计 256 KiB |
 | 历史页 | 20 turns、App Server result 3 MiB |
 | React 当前窗口 | 200 turns 或 8 MiB 归一化数据 |
+| Rust 当前会话窗口 | 同样为 200 turns 或 8 MiB 归一化数据 |
 | 游标、ID | 分别 4 KiB、1 KiB |
 | 单条显示文本 | 128 KiB |
-| 工具聚合输出 | 256 KiB；A3 默认不把内容送 React |
+| 命令/工具显示摘要 | 每项 8 KiB；参数、结果和聚合输出不保留 |
 | 用户可见错误 | 8 KiB |
 | loading 事件缓存 | 512 事件或 2 MiB |
+| 未见 item 的待定 delta | 32 个 item 或 256 KiB，超过 5 秒或溢出即丢弃并触发对账 |
+| 单次流式 Tauri 批次 | 128 个变更或 256 KiB，最多约 30 批/秒 |
 
-Rust 最多约 30 Hz 合并 delta 后向 Tauri 发送批次；React reducer 一次应用一批。消息区使用虚拟列表和稳定 item key。虚拟化只解决 DOM 数量，不能替代 8 MiB 内存硬上限。
+Rust 对实时 `params` 使用借用读取，只复制通过类型、身份和字段上限校验后的 DTO；完整工具参数/结果、聚合输出和原始错误不得克隆进状态。达到单 item 上限后继续消费但不再追加内容，并设置归一化截断标记；`item/completed` 也必须经过同一投影，不能用完整 item 覆盖有界状态。Rust 最多约 30 Hz 合并 delta 后向 Tauri 发送有界批次；React reducer 一次应用一批。消息区使用虚拟列表和稳定 item key。虚拟化只解决 DOM 数量，不能替代 Rust 与 React 各自的 8 MiB 内存硬上限。
 
 草稿按 thread ID 存入 Rivloom 隔离目录的版本化 JSON，使用跨平台同目录临时文件、flush 和原子替换；不复制 App Server 历史。发送时 Rust 生成 `clientUserMessageId`，同一发送记录只允许一个在途请求。该 ID只做关联，服务端不提供幂等。
 
@@ -217,6 +220,7 @@ Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已�
 | 失败 | 行为 |
 | --- | --- |
 | 历史结果超过协议预算 | App Server 在发送前截断或缩页；若契约失效，桌面显示协议错误而不是提高上限 |
+| 单条实时 JSONL 超过 4 MiB | 现有 decoder 关闭该连接；活动 turn 进入 outcomeUnknown，重连后用有界 summary 对账，不提高上限 |
 | resume 超时后迟到 | revision 已失效；丢弃响应并 best-effort unsubscribe |
 | 切换时旧 delta 到达 | 连接身份/revision/thread/turn/item 任一不匹配即丢弃 |
 | unsubscribe 失败 | 当前 UI 仍关闭；依赖 identity 隔离，后台记录计数，重连时对账 |

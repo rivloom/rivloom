@@ -163,9 +163,10 @@
 **Steps:**
 
 1. Test started-before-response, completion-without-start, delta-before-item, duplicate completion, late delta, failure, retryable error, interrupt and reconnect reconciliation.
-2. Implement exhaustive session/turn/item transitions. Only `item/completed` and `turn/completed` seal their respective states.
-3. Merge deltas in Rust and emit at most about 30 batches per second with aggregate caps.
-4. Run desktop Rust tests. Commit as `feat(desktop): reduce streaming chat events`.
+2. Add near-4-MiB notification fixtures and assert 128-KiB text, 8-KiB tool/error summaries, 32-item/256-KiB/5-second pending-delta limits, and 200-turn/8-MiB Rust eviction. Assert raw tool arguments, results and aggregate output are never retained.
+3. Implement exhaustive session/turn/item transitions. Only `item/completed` and `turn/completed` seal their respective states; completed items pass through the same bounded projector and cannot restore discarded raw content.
+4. Merge deltas in Rust, mark truncated items, and emit at most about 30 batches per second with at most 128 changes or 256 KiB per streaming batch.
+5. Run desktop Rust tests. Commit as `feat(desktop): reduce streaming chat events`.
 
 ## Stage A3.4b — A4-safe server request boundary
 
@@ -269,7 +270,7 @@
 
 1. From `codex-rs`, run `just fmt`, scoped `just fix -p` for changed crates, protocol tests and the app-server public JSON-RPC suite required by A3. Ask before a complete workspace `just test`.
 2. From `apps/desktop`, run `just fmt`, `just check`, `just test-rust` and `just check-rust`.
-3. Run fake-sidecar scenarios for exact start/resume/turn safety payloads, unsafe effective-policy rejection, metadata-only reads, 4 MiB boundaries, rate-limit refresh/update races, late resume, old connection/project/thread/turn/item events, delta loss, reconnect and every server-request rejection. Assert zero real model endpoints.
+3. Run fake-sidecar scenarios for exact start/resume/turn safety payloads, unsafe effective-policy rejection, metadata-only reads, history and live-event 4 MiB boundaries, rate-limit refresh/update races, late resume, old connection/project/thread/turn/item events, delta loss, reconnect and every server-request rejection. Assert zero real model endpoints.
 4. Perform deterministic Windows smoke and visual checks; record CI coverage for macOS/Linux.
 5. Audit every PR against 800/500 lines, raw JSON exposure, log payloads, permissions, experimental capability, rollout reads and JSONL limit changes.
 6. Record actual commits, test counts, snapshots, known limitations and A4 as the only next product stage. Commit as `docs: record A3 chat verification`.
