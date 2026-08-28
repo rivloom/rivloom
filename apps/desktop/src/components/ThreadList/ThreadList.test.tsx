@@ -131,6 +131,10 @@ describe("ThreadList", () => {
     expect(activeButton).toHaveAttribute("aria-current", "true");
     expect(screen.getByText("进行中")).toBeInTheDocument();
     expect(screen.getByText("可继续")).toBeInTheDocument();
+    expect(screen.getAllByRole("time")[0]).toHaveAttribute(
+      "datetime",
+      new Date(activeThread.recencyAt! * 1000).toISOString(),
+    );
     expect(screen.getAllByRole("time")[1]).toHaveAttribute(
       "datetime",
       new Date(unnamedThread.updatedAt * 1000).toISOString(),
@@ -195,6 +199,18 @@ describe("ThreadList", () => {
     await user.click(screen.getByRole("button", { name: "加载更多会话" }));
     expect(available.onLoadMore).toHaveBeenCalledOnce();
     available.unmount();
+
+    const exhausted = renderThreadList({
+      state: {
+        state: "ready",
+        threads: [activeThread],
+        nextCursor: null,
+      },
+    });
+    expect(
+      screen.queryByRole("button", { name: "加载更多会话" }),
+    ).not.toBeInTheDocument();
+    exhausted.unmount();
 
     const belowBound = renderThreadList({
       state: {
