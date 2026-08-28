@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ProjectWorkspace > forwards retry and bounded pagination without exposing cwd > populated workspace 1`] = `
+[
+  "←返回项目首页Local projectRivloom Demo项目目录C:\\workspaces\\a-very-long-folder-name\\rivloom-demo＋新建会话Project threads项目会话查看该项目已有的会话摘要；选择会话不会恢复聊天或发送模型请求。1 / 500会话列表暂时不可用。重新加载会话○检查本地项目会话可继续只读取归一化元数据，不载入历史消息。<time>加载更多会话",
+  "←返回项目首页 | enabled",
+  "＋新建会话 | enabled",
+  "重新加载会话 | enabled",
+  "查看会话 检查本地项目会话，状态可继续 | enabled",
+  "加载更多会话 | enabled",
+]
+`;
+
+exports[`ProjectWorkspace > keeps the selected project visible through a runtime disconnect > disconnected workspace 1`] = `
+[
+  "←返回项目首页Local projectRivloom Demo项目目录C:\\workspaces\\a-very-long-folder-name\\rivloom-demo＋新建会话!核心服务连接中断项目元数据仍保留在本页；连接恢复后可重新加载会话。",
+  "←返回项目首页 | enabled",
+  "＋新建会话 | disabled",
+]
+`;
