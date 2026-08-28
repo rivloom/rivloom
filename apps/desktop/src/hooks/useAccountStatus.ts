@@ -5,19 +5,15 @@ import {
   getAccountStatus,
   logoutAccount,
   onAccountStatusChanged,
-  openDeviceVerification,
   startChatgptLogin,
-  startDeviceCodeLogin,
 } from "../lib/accountBridge";
 import type { AccountStatus } from "../types/account";
 
 export type AccountAction =
   | "refresh"
   | "startChatgptLogin"
-  | "startDeviceCodeLogin"
   | "cancelLogin"
-  | "logout"
-  | "openDeviceVerification";
+  | "logout";
 
 const checkingStatus: AccountStatus = { state: "checking" };
 const unavailableStatus: AccountStatus = {
@@ -164,10 +160,6 @@ export function useAccountStatus(runtimeConnected: boolean) {
     () => runAction("startChatgptLogin", startChatgptLogin),
     [runAction],
   );
-  const beginDeviceCodeLogin = useCallback(
-    () => runAction("startDeviceCodeLogin", startDeviceCodeLogin),
-    [runAction],
-  );
   const cancelLogin = useCallback(
     () => runAction("cancelLogin", cancelAccountLogin),
     [runAction],
@@ -176,17 +168,10 @@ export function useAccountStatus(runtimeConnected: boolean) {
     () => runAction("logout", logoutAccount),
     [runAction],
   );
-  const openVerification = useCallback(
-    () => runAction("openDeviceVerification", openDeviceVerification),
-    [runAction],
-  );
-
   return {
     beginChatgptLogin,
-    beginDeviceCodeLogin,
     cancelLogin,
     logout,
-    openVerification,
     pendingAction,
     refresh,
     status,

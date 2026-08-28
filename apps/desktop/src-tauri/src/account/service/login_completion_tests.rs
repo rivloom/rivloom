@@ -65,39 +65,6 @@ fn matching_completion_before_browser_attempt_install_skips_temporary_state() {
 }
 
 #[test]
-fn matching_completion_before_device_attempt_install_skips_temporary_state() {
-    let (service, connection, opener, tasks) = early_completion_harness(
-        vec![device_login_response("early-device"), signed_in_response()],
-        vec!["early-device".to_string()],
-    );
-
-    assert_eq!(service.start_device_code_login(), AccountStatus::Checking);
-    assert_eq!(
-        (
-            service.status(),
-            opener.opened_urls(),
-            tasks.len(),
-            connection.requests(),
-        ),
-        (
-            AccountStatus::Checking,
-            vec![],
-            1,
-            vec![device_start_request()],
-        )
-    );
-
-    tasks.run_next();
-    assert_eq!(
-        (service.status(), connection.requests()),
-        (
-            signed_in_status(),
-            vec![device_start_request(), account_read_request()],
-        )
-    );
-}
-
-#[test]
 fn completion_from_previous_connection_cannot_finish_a_new_login_start() {
     let tasks = Arc::new(ManualTaskSpawner::default());
     let service =
@@ -112,7 +79,7 @@ fn completion_from_previous_connection_cannot_finish_a_new_login_start() {
         request_sender,
     }));
     let login_service = service.clone();
-    let login = thread::spawn(move || login_service.start_device_code_login());
+    let login = thread::spawn(move || login_service.start_browser_login());
     let start = next_request(&request_receiver);
 
     notify_from(
@@ -121,11 +88,15 @@ fn completion_from_previous_connection_cannot_finish_a_new_login_start() {
         "account/login/completed",
         json!({ "loginId": "reused-login", "success": true }),
     );
-    start.respond(device_login_response("reused-login"));
+    start.respond(browser_response("reused-login"));
 
     assert_eq!(
         (login.join().unwrap(), service.status(), tasks.len()),
-        (device_pending_status(), device_pending_status(), 0)
+        (
+            AccountStatus::BrowserPending,
+            AccountStatus::BrowserPending,
+            0,
+        )
     );
 }
 
@@ -163,7 +134,7 @@ fn failed_completion_before_attempt_install_skips_temporary_state_and_rereads() 
         request_sender,
     }));
     let login_service = service.clone();
-    let login = thread::spawn(move || login_service.start_device_code_login());
+    let login = thread::spawn(move || login_service.start_browser_login());
     let start = next_request(&request_receiver);
 
     notify(
@@ -175,7 +146,7 @@ fn failed_completion_before_attempt_install_skips_temporary_state_and_rereads() 
             "error": "TOP_SECRET",
         }),
     );
-    start.respond(device_login_response("early-failure"));
+    start.respond(browser_response("early-failure"));
 
     assert_eq!(
         (login.join().unwrap(), service.status(), tasks.len()),
@@ -201,21 +172,21 @@ fn empty_oversized_and_duplicate_early_ids_do_not_exhaust_the_window() {
     ));
     completion_ids.push("bounded-login".to_string());
     let (service, connection, _opener, tasks) = early_completion_harness(
-        vec![device_login_response("bounded-login"), signed_in_response()],
+        vec![browser_response("bounded-login"), signed_in_response()],
         completion_ids,
     );
 
-    assert_eq!(service.start_device_code_login(), AccountStatus::Checking);
+    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
     assert_eq!(
         (tasks.len(), connection.requests()),
-        (1, vec![device_start_request()])
+        (1, vec![browser_start_request()])
     );
     tasks.run_next();
     assert_eq!(
         (service.status(), connection.requests()),
         (
             signed_in_status(),
-            vec![device_start_request(), account_read_request()],
+            vec![browser_start_request(), account_read_request()],
         )
     );
 }
@@ -227,17 +198,14 @@ fn unique_early_ids_evict_the_oldest_and_keep_the_latest_completion() {
         .collect::<Vec<_>>();
     completion_ids.push("capacity-login".to_string());
     let (service, connection, _opener, tasks) = early_completion_harness(
-        vec![
-            device_login_response("capacity-login"),
-            signed_in_response(),
-        ],
+        vec![browser_response("capacity-login"), signed_in_response()],
         completion_ids,
     );
 
-    assert_eq!(service.start_device_code_login(), AccountStatus::Checking);
+    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
     assert_eq!(
         (tasks.len(), connection.requests()),
-        (1, vec![device_start_request()])
+        (1, vec![browser_start_request()])
     );
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
@@ -249,12 +217,12 @@ fn unique_early_id_capacity_evicts_the_oldest_completion() {
     completion_ids
         .extend((0..MAX_EARLY_COMPLETION_IDS).map(|index| format!("newer-stale-{index}")));
     let (service, connection, _opener, tasks) =
-        early_completion_harness(vec![device_login_response("oldest-login")], completion_ids);
+        early_completion_harness(vec![browser_response("oldest-login")], completion_ids);
 
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
     assert_eq!(
         (tasks.len(), connection.requests()),
-        (0, vec![device_start_request()])
+        (0, vec![browser_start_request()])
     );
 }
 
@@ -265,10 +233,10 @@ fn duplicate_early_id_refreshes_fifo_position_without_consuming_capacity() {
     let mut completion_ids = full_early_id_window(anchor_id, duplicate_id);
     completion_ids.push(duplicate_id.to_string());
     let (service, _connection, _opener, tasks) = early_completion_harness(
-        vec![device_login_response(anchor_id), signed_in_response()],
+        vec![browser_response(anchor_id), signed_in_response()],
         completion_ids,
     );
-    assert_eq!(service.start_device_code_login(), AccountStatus::Checking);
+    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
     assert_eq!(tasks.len(), 1);
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
@@ -280,10 +248,10 @@ fn duplicate_early_id_refreshes_fifo_position_without_consuming_capacity() {
         "newest-stale-two".to_string(),
     ]);
     let (service, _connection, _opener, tasks) = early_completion_harness(
-        vec![device_login_response(duplicate_id), signed_in_response()],
+        vec![browser_response(duplicate_id), signed_in_response()],
         completion_ids,
     );
-    assert_eq!(service.start_device_code_login(), AccountStatus::Checking);
+    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
     assert_eq!(tasks.len(), 1);
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
@@ -294,23 +262,23 @@ fn aggregate_early_id_bytes_are_capped_at_the_configured_limit() {
     let matching_id = "m".repeat(MAX_EARLY_COMPLETION_BYTES / 2);
     let exact_filler = "e".repeat(MAX_EARLY_COMPLETION_BYTES - matching_id.len());
     let (service, _connection, _opener, tasks) = early_completion_harness(
-        vec![device_login_response(&matching_id), signed_in_response()],
+        vec![browser_response(&matching_id), signed_in_response()],
         vec![matching_id.clone(), exact_filler],
     );
-    assert_eq!(service.start_device_code_login(), AccountStatus::Checking);
+    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
     assert_eq!(tasks.len(), 1);
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
 
     let overflow_filler = "o".repeat(MAX_EARLY_COMPLETION_BYTES - matching_id.len() + 1);
     let (service, connection, _opener, tasks) = early_completion_harness(
-        vec![device_login_response(&matching_id)],
+        vec![browser_response(&matching_id)],
         vec![matching_id, overflow_filler],
     );
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
     assert_eq!(
         (tasks.len(), connection.requests()),
-        (0, vec![device_start_request()])
+        (0, vec![browser_start_request()])
     );
 }
 
@@ -325,10 +293,10 @@ fn full_early_id_window(anchor_id: &str, duplicate_id: &str) -> Vec<String> {
 fn matching_success_and_failure_completions_clear_temporary_values_then_refresh() {
     for success in [true, false] {
         let (service, connection, tasks) = harness(vec![
-            device_login_response("matching-login"),
+            browser_response("matching-login"),
             signed_in_response(),
         ]);
-        assert_eq!(service.start_device_code_login(), device_pending_status());
+        assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
 
         let params = if success {
             json!({ "loginId": "matching-login", "success": true })
@@ -342,7 +310,7 @@ fn matching_success_and_failure_completions_clear_temporary_values_then_refresh(
         notify(&service, "account/login/completed", params);
         assert_eq!(
             (service.status(), tasks.len(), connection.requests()),
-            (AccountStatus::Checking, 1, vec![device_start_request()],)
+            (AccountStatus::Checking, 1, vec![browser_start_request()],)
         );
 
         tasks.run_next();
@@ -350,7 +318,7 @@ fn matching_success_and_failure_completions_clear_temporary_values_then_refresh(
             (service.status(), connection.requests()),
             (
                 signed_in_status(),
-                vec![device_start_request(), account_read_request()],
+                vec![browser_start_request(), account_read_request()],
             )
         );
         assert!(
@@ -363,8 +331,8 @@ fn matching_success_and_failure_completions_clear_temporary_values_then_refresh(
 
 #[test]
 fn stale_and_malformed_completion_notifications_are_ignored() {
-    let (service, connection, tasks) = harness(vec![device_login_response("current-login")]);
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    let (service, connection, tasks) = harness(vec![browser_response("current-login")]);
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
 
     for params in [
         json!({ "loginId": "stale-login", "success": true, "error": null }),
@@ -385,7 +353,11 @@ fn stale_and_malformed_completion_notifications_are_ignored() {
 
     assert_eq!(
         (service.status(), tasks.len(), connection.requests()),
-        (device_pending_status(), 0, vec![device_start_request()])
+        (
+            AccountStatus::BrowserPending,
+            0,
+            vec![browser_start_request()],
+        )
     );
 }
 
@@ -516,9 +488,9 @@ fn completion_during_failed_cancel_wins_over_the_stale_action_error() {
         request_sender,
     }));
     let login_service = service.clone();
-    let login = thread::spawn(move || login_service.start_device_code_login());
-    next_request(&request_receiver).respond(device_login_response("complete-during-cancel"));
-    assert_eq!(login.join().unwrap(), device_pending_status());
+    let login = thread::spawn(move || login_service.start_browser_login());
+    next_request(&request_receiver).respond(browser_response("complete-during-cancel"));
+    assert_eq!(login.join().unwrap(), AccountStatus::BrowserPending);
 
     let cancel_service = service.clone();
     let cancel = thread::spawn(move || cancel_service.cancel_account_login());
@@ -771,20 +743,8 @@ fn account_read_request() -> RecordedRequest {
     request("account/read", json!({ "refreshToken": false }))
 }
 
-fn device_start_request() -> RecordedRequest {
-    request(
-        "account/login/start",
-        json!({ "type": "chatgptDeviceCode" }),
-    )
-}
-
-fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
-    Ok(json!({
-        "type": "chatgptDeviceCode",
-        "loginId": login_id,
-        "verificationUrl": "https://auth.openai.com/codex/device",
-        "userCode": "ABCD-1234",
-    }))
+fn browser_response(login_id: &str) -> Result<Value, ConnectionError> {
+    browser_login_response(login_id, "https://auth.openai.com/oauth")
 }
 
 fn signed_in_response() -> Result<Value, ConnectionError> {
@@ -802,12 +762,5 @@ fn signed_in_status() -> AccountStatus {
     AccountStatus::SignedIn {
         email: None,
         plan_type: "plus".to_string(),
-    }
-}
-
-fn device_pending_status() -> AccountStatus {
-    AccountStatus::DevicePending {
-        verification_url: "https://auth.openai.com/codex/device".to_string(),
-        user_code: "ABCD-1234".to_string(),
     }
 }

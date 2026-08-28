@@ -8,9 +8,7 @@ const bridgeMocks = vi.hoisted(() => ({
   getAccountStatus: vi.fn(),
   logoutAccount: vi.fn(),
   onAccountStatusChanged: vi.fn(),
-  openDeviceVerification: vi.fn(),
   startChatgptLogin: vi.fn(),
-  startDeviceCodeLogin: vi.fn(),
 }));
 
 vi.mock("../lib/accountBridge", () => bridgeMocks);
@@ -37,25 +35,13 @@ describe("useAccountStatus", () => {
     bridgeMocks.getAccountStatus.mockReset();
     bridgeMocks.logoutAccount.mockReset();
     bridgeMocks.onAccountStatusChanged.mockReset();
-    bridgeMocks.openDeviceVerification.mockReset();
     bridgeMocks.startChatgptLogin.mockReset();
-    bridgeMocks.startDeviceCodeLogin.mockReset();
 
     bridgeMocks.getAccountStatus.mockResolvedValue(signedOutStatus);
     bridgeMocks.onAccountStatusChanged.mockResolvedValue(vi.fn());
     bridgeMocks.cancelAccountLogin.mockResolvedValue(signedOutStatus);
     bridgeMocks.logoutAccount.mockResolvedValue(signedOutStatus);
-    bridgeMocks.openDeviceVerification.mockResolvedValue({
-      state: "devicePending",
-      verificationUrl: "https://auth.openai.com/deviceauth",
-      userCode: "ABCD-EFGH",
-    });
     bridgeMocks.startChatgptLogin.mockResolvedValue(browserPendingStatus);
-    bridgeMocks.startDeviceCodeLogin.mockResolvedValue({
-      state: "devicePending",
-      verificationUrl: "https://auth.openai.com/deviceauth",
-      userCode: "ABCD-EFGH",
-    });
   });
 
   it("waits for the runtime and subscribes before the initial read", async () => {
@@ -233,14 +219,14 @@ describe("useAccountStatus", () => {
   });
 
   it("maps a rejected action to the safe account error", async () => {
-    bridgeMocks.startDeviceCodeLogin.mockRejectedValue(
+    bridgeMocks.startChatgptLogin.mockRejectedValue(
       new Error("private backend detail"),
     );
 
     const { result } = renderHook(() => useAccountStatus(true));
     await waitFor(() => expect(result.current.status).toEqual(signedOutStatus));
 
-    await act(async () => result.current.beginDeviceCodeLogin());
+    await act(async () => result.current.beginChatgptLogin());
 
     expect(result.current.status).toEqual(unavailableStatus);
     expect(result.current.pendingAction).toBeNull();

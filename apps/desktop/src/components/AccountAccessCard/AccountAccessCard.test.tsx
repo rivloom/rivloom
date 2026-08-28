@@ -18,10 +18,8 @@ function renderAccount(
   const callbacks = {
     onRefresh: vi.fn(),
     onStartChatgptLogin: vi.fn(),
-    onStartDeviceCodeLogin: vi.fn(),
     onCancelLogin: vi.fn(),
     onLogout: vi.fn(),
-    onOpenDeviceVerification: vi.fn(),
   };
 
   render(
@@ -55,59 +53,31 @@ describe("AccountAccessCard", () => {
     expect(screen.getByText("正在读取账号状态…")).toBeInTheDocument();
   });
 
-  it("starts either signed-out login method and deduplicates pending actions", async () => {
+  it("offers only browser login and disables it while the action is pending", async () => {
     const user = userEvent.setup();
     const callbacks = renderAccount();
 
     await user.click(screen.getByRole("button", { name: "使用浏览器登录" }));
-    await user.click(screen.getByRole("button", { name: "使用设备码登录" }));
 
     expect(callbacks.onStartChatgptLogin).toHaveBeenCalledOnce();
-    expect(callbacks.onStartDeviceCodeLogin).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
 
     cleanup();
     renderAccount({ pendingAction: "startChatgptLogin" });
     expect(
       screen.getByRole("button", { name: "使用浏览器登录" }),
     ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "使用设备码登录" }),
-    ).toBeDisabled();
   });
 
-  it("allows switching or cancelling while browser login is pending", async () => {
+  it("allows cancelling while browser login is pending", async () => {
     const user = userEvent.setup();
     const callbacks = renderAccount({ status: { state: "browserPending" } });
 
     expect(screen.getByText("请在浏览器完成登录")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "改用设备码" }));
     await user.click(screen.getByRole("button", { name: "取消登录" }));
 
-    expect(callbacks.onStartDeviceCodeLogin).toHaveBeenCalledOnce();
     expect(callbacks.onCancelLogin).toHaveBeenCalledOnce();
-  });
-
-  it("copies and opens the controlled device verification flow", async () => {
-    const user = userEvent.setup();
-    const callbacks = renderAccount({
-      status: {
-        state: "devicePending",
-        verificationUrl: "https://auth.openai.com/deviceauth",
-        userCode: "ABCD-EFGH",
-      },
-    });
-
-    expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
-    expect(
-      screen.getByText("https://auth.openai.com/deviceauth"),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "复制代码" }));
-    expect(await navigator.clipboard.readText()).toBe("ABCD-EFGH");
-    expect(screen.getByRole("status")).toHaveTextContent("设备码已复制");
-
-    await user.click(screen.getByRole("button", { name: "打开验证页面" }));
-    expect(callbacks.onOpenDeviceVerification).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
   it("names the logout dialog, focuses cancel, handles Escape, and restores focus", async () => {

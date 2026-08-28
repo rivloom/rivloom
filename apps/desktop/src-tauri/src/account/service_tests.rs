@@ -387,7 +387,7 @@ fn failed_browser_cleanup_retains_the_attempt_for_the_next_retry() {
 }
 
 #[test]
-fn invalid_browser_urls_are_canceled_and_suggest_device_code() {
+fn invalid_browser_urls_are_canceled_with_a_retryable_error() {
     let (service, connection, opener) = browser_harness(
         vec![
             browser_login_response(
@@ -816,7 +816,7 @@ fn unsupported_account_error() -> AccountStatus {
 
 pub(super) fn browser_open_error() -> AccountStatus {
     AccountStatus::Error {
-        message: "无法打开 ChatGPT 登录页面，请尝试设备码登录。".to_string(),
+        message: "无法打开 ChatGPT 登录页面，请重试。".to_string(),
         retryable: true,
     }
 }

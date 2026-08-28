@@ -42,11 +42,6 @@ async fn start_chatgpt_login(app_handle: AppHandle) -> AccountStatus {
 }
 
 #[tauri::command]
-async fn start_device_code_login(app_handle: AppHandle) -> AccountStatus {
-    run_account_command(app_handle, AccountCommand::StartDeviceCodeLogin).await
-}
-
-#[tauri::command]
 async fn cancel_account_login(app_handle: AppHandle) -> AccountStatus {
     run_account_command(app_handle, AccountCommand::CancelLogin).await
 }
@@ -54,11 +49,6 @@ async fn cancel_account_login(app_handle: AppHandle) -> AccountStatus {
 #[tauri::command]
 async fn logout_account(app_handle: AppHandle) -> AccountStatus {
     run_account_command(app_handle, AccountCommand::Logout).await
-}
-
-#[tauri::command]
-async fn open_device_verification(app_handle: AppHandle) -> AccountStatus {
-    run_account_command(app_handle, AccountCommand::OpenDeviceVerification).await
 }
 
 async fn run_account_command(app_handle: AppHandle, command: AccountCommand) -> AccountStatus {
@@ -95,10 +85,8 @@ pub fn run() {
             retry_app_server,
             get_account_status,
             start_chatgpt_login,
-            start_device_code_login,
             cancel_account_login,
             logout_account,
-            open_device_verification,
         ])
         .setup(|app| {
             let codex_home = app.path().app_local_data_dir()?.join("codex-home");

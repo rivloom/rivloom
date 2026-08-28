@@ -9,10 +9,6 @@ fn account_statuses_expose_only_the_frontend_contract() {
         AccountStatus::Checking,
         AccountStatus::SignedOut,
         AccountStatus::BrowserPending,
-        AccountStatus::DevicePending {
-            verification_url: "https://auth.openai.com/codex/device".to_string(),
-            user_code: "ABCD-1234".to_string(),
-        },
         AccountStatus::SignedIn {
             email: None,
             plan_type: "plus".to_string(),
@@ -38,11 +34,6 @@ fn account_statuses_expose_only_the_frontend_contract() {
             json!({ "state": "checking" }),
             json!({ "state": "signedOut" }),
             json!({ "state": "browserPending" }),
-            json!({
-                "state": "devicePending",
-                "verificationUrl": "https://auth.openai.com/codex/device",
-                "userCode": "ABCD-1234",
-            }),
             json!({
                 "state": "signedIn",
                 "email": null,

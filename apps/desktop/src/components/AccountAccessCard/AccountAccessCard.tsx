@@ -18,13 +18,10 @@ type AccountAccessCardProps = {
   pendingAction: AccountAction | null;
   onRefresh: () => void;
   onStartChatgptLogin: () => void;
-  onStartDeviceCodeLogin: () => void;
   onCancelLogin: () => void;
   onLogout: () => void;
-  onOpenDeviceVerification: () => void;
 };
 
-type CopyState = "idle" | "copied" | "error";
 type AccountTone = AccountStatus["state"] | "unavailable";
 
 export function AccountAccessCard({
@@ -33,22 +30,16 @@ export function AccountAccessCard({
   pendingAction,
   onRefresh,
   onStartChatgptLogin,
-  onStartDeviceCodeLogin,
   onCancelLogin,
   onLogout,
-  onOpenDeviceVerification,
 }: AccountAccessCardProps) {
-  const [copyState, setCopyState] = useState<CopyState>("idle");
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const cancelLogoutRef = useRef<HTMLButtonElement>(null);
   const confirmLogoutRef = useRef<HTMLButtonElement>(null);
   const logoutTriggerRef = useRef<HTMLButtonElement>(null);
   const wasLogoutDialogOpenRef = useRef(false);
   const busy = pendingAction !== null;
-  const deviceCode = status.state === "devicePending" ? status.userCode : null;
   const view = getAccountView(runtimeConnected, status);
-
-  useEffect(() => setCopyState("idle"), [deviceCode]);
 
   useEffect(() => {
     if (logoutDialogOpen) {
@@ -64,18 +55,6 @@ export function AccountAccessCard({
       setLogoutDialogOpen(false);
     }
   }, [status.state]);
-
-  const copyDeviceCode = async () => {
-    if (status.state !== "devicePending") {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(status.userCode);
-      setCopyState("copied");
-    } catch {
-      setCopyState("error");
-    }
-  };
 
   const closeLogoutDialog = () => setLogoutDialogOpen(false);
   const handleLogoutDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -129,14 +108,6 @@ export function AccountAccessCard({
             >
               {zhCN.account.actions.browserLogin}
             </AccountButton>
-            <AccountButton
-              variant="secondary"
-              busy={busy}
-              pending={pendingAction === "startDeviceCodeLogin"}
-              onClick={onStartDeviceCodeLogin}
-            >
-              {zhCN.account.actions.deviceLogin}
-            </AccountButton>
           </div>
         ) : null}
 
@@ -148,78 +119,9 @@ export function AccountAccessCard({
             </div>
             <div className={styles.actions}>
               <AccountButton
-                variant="secondary"
-                busy={busy}
-                onClick={onStartDeviceCodeLogin}
-              >
-                {zhCN.account.actions.switchToDevice}
-              </AccountButton>
-              <AccountButton
                 variant="ghost"
                 busy={busy}
                 pending={pendingAction === "cancelLogin"}
-                onClick={onCancelLogin}
-              >
-                {zhCN.account.actions.cancel}
-              </AccountButton>
-            </div>
-          </>
-        ) : null}
-
-        {runtimeConnected && status.state === "devicePending" ? (
-          <>
-            <dl className={styles.detailPanel}>
-              <div>
-                <dt>{zhCN.account.devicePending.urlLabel}</dt>
-                <dd className={styles.verificationUrl}>
-                  {status.verificationUrl}
-                </dd>
-              </div>
-              <div>
-                <dt>{zhCN.account.devicePending.codeLabel}</dt>
-                <dd className={styles.deviceCode}>
-                  <code>{status.userCode}</code>
-                  <button
-                    className={styles.copyButton}
-                    type="button"
-                    onClick={() => void copyDeviceCode()}
-                  >
-                    {copyState === "copied"
-                      ? zhCN.account.actions.copied
-                      : zhCN.account.actions.copyCode}
-                  </button>
-                </dd>
-              </div>
-            </dl>
-            {copyState !== "idle" ? (
-              <p
-                className={styles.copyFeedback}
-                role={copyState === "error" ? "alert" : "status"}
-              >
-                {copyState === "copied"
-                  ? zhCN.account.devicePending.copied
-                  : zhCN.account.devicePending.copyFailed}
-              </p>
-            ) : null}
-            <div className={styles.actions}>
-              <AccountButton
-                variant="primary"
-                busy={busy}
-                pending={pendingAction === "openDeviceVerification"}
-                onClick={onOpenDeviceVerification}
-              >
-                {zhCN.account.actions.openVerification}
-              </AccountButton>
-              <AccountButton
-                variant="secondary"
-                busy={busy}
-                onClick={onStartChatgptLogin}
-              >
-                {zhCN.account.actions.switchToBrowser}
-              </AccountButton>
-              <AccountButton
-                variant="ghost"
-                busy={busy}
                 onClick={onCancelLogin}
               >
                 {zhCN.account.actions.cancel}
@@ -351,7 +253,7 @@ function AccountBadge({ tone, label }: Pick<AccountView, "tone" | "label">) {
 }
 
 type AccountButtonProps = {
-  variant: "primary" | "secondary" | "ghost";
+  variant: "primary" | "ghost";
   busy: boolean;
   pending?: boolean;
   onClick: () => void;
@@ -400,12 +302,6 @@ function getAccountView(
         mark: "↗",
         tone: status.state,
         ...zhCN.account.browserPending,
-      };
-    case "devicePending":
-      return {
-        mark: "#",
-        tone: status.state,
-        ...zhCN.account.devicePending,
       };
     case "signedIn":
       return { mark: "✓", tone: status.state, ...zhCN.account.signedIn };

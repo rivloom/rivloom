@@ -37,7 +37,7 @@ export const zhCN = {
       label: "未登录",
       title: "连接 ChatGPT 账号",
       description:
-        "选择浏览器或设备码登录。凭据由本地 App Server 保存，不会进入页面。",
+        "通过系统浏览器登录。凭据由本地 App Server 保存，不会进入页面。",
     },
     browserPending: {
       label: "等待浏览器",
@@ -45,15 +45,6 @@ export const zhCN = {
       description:
         "登录页已在系统浏览器打开；完成后 Rivloom 会自动刷新账号状态。",
       hint: "正在等待浏览器确认",
-    },
-    devicePending: {
-      label: "设备码待验证",
-      title: "在浏览器中输入设备码",
-      description: "复制一次性代码，然后打开官方验证页面完成授权。",
-      urlLabel: "验证地址",
-      codeLabel: "一次性代码",
-      copied: "设备码已复制",
-      copyFailed: "复制失败，请手动选择并复制设备码。",
     },
     signedIn: {
       label: "已登录",
@@ -69,13 +60,7 @@ export const zhCN = {
     },
     actions: {
       browserLogin: "使用浏览器登录",
-      deviceLogin: "使用设备码登录",
-      switchToDevice: "改用设备码",
-      switchToBrowser: "改用浏览器登录",
       cancel: "取消登录",
-      copyCode: "复制代码",
-      copied: "已复制",
-      openVerification: "打开验证页面",
       logout: "退出账号",
       retry: "重新检查",
     },
