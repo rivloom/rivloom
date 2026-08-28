@@ -372,7 +372,19 @@ pub struct Turn {
     pub duration_ms: Option<i64>,
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[derive(
+    Default,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    JsonSchema,
+    TS,
+    ExperimentalApi,
+)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub enum TurnItemsView {
@@ -381,6 +393,7 @@ pub enum TurnItemsView {
     /// `items` contains only a display summary for this turn.
     Summary,
     /// `items` contains every ThreadItem available from persisted app-server history for this turn.
+    #[experimental("thread/turns/list.itemsView.full")]
     #[default]
     Full,
 }

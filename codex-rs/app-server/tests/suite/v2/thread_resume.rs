@@ -3100,6 +3100,7 @@ async fn cold_paginated_resume_restores_usage_without_loading_turns() -> Result<
             limit: Some(1),
             sort_direction: Some(SortDirection::Desc),
             items_view: Some(TurnItemsView::NotLoaded),
+            max_bytes: None,
         })
         .await?;
     let turns: ThreadTurnsListResponse =
@@ -3176,6 +3177,7 @@ async fn cold_paginated_resume_omits_usage_when_its_turn_is_ambiguous() -> Resul
             limit: Some(1),
             sort_direction: Some(SortDirection::Desc),
             items_view: Some(TurnItemsView::NotLoaded),
+            max_bytes: None,
         })
         .await?;
     let turns: ThreadTurnsListResponse =

@@ -349,6 +349,7 @@ async fn turn_ids_from_cursor(
                 limit: None,
                 sort_direction,
                 items_view: None,
+                max_bytes: None,
             },
         })
         .await?;

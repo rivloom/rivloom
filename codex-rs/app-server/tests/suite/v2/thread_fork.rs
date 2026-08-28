@@ -1729,6 +1729,7 @@ async fn assert_thread_fork_freezes_active_paginated_turn_as_interrupted(
                 limit: None,
                 sort_direction: None,
                 items_view: None,
+                max_bytes: None,
             },
         })
         .await?;
@@ -1764,6 +1765,7 @@ async fn assert_thread_fork_freezes_active_paginated_turn_as_interrupted(
                 limit: Some(1),
                 sort_direction: None,
                 items_view: None,
+                max_bytes: None,
             },
         })
         .await?;
@@ -1793,6 +1795,7 @@ async fn assert_thread_fork_freezes_active_paginated_turn_as_interrupted(
                 limit: None,
                 sort_direction: None,
                 items_view: None,
+                max_bytes: None,
             },
         })
         .await?;

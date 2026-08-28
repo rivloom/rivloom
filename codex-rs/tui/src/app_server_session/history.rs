@@ -145,6 +145,7 @@ impl AppServerSession {
                     limit: Some(INITIAL_HISTORY_TURN_LIMIT),
                     sort_direction: Some(SortDirection::Desc),
                     items_view: Some(TurnItemsView::NotLoaded),
+                    max_bytes: None,
                 },
             })
             .await

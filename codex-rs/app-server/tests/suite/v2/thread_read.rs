@@ -97,6 +97,8 @@ use uuid::Uuid;
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
 #[cfg(not(windows))]
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const BOUNDED_HISTORY_RESULT_BYTES: usize = 3 * 1024 * 1024;
+const DESKTOP_JSONL_MAX_LINE_BYTES: usize = 4 * 1024 * 1024;
 
 #[tokio::test]
 async fn thread_read_returns_summary_without_turns() -> Result<()> {
@@ -278,6 +280,7 @@ async fn paginated_stored_thread_routes_projected_turns() -> Result<()> {
             limit: None,
             sort_direction: None,
             items_view: None,
+            max_bytes: Some(BOUNDED_HISTORY_RESULT_BYTES as u32),
         })
         .await?;
     let turns_list_resp: JSONRPCResponse = timeout(
@@ -291,6 +294,7 @@ async fn paginated_stored_thread_routes_projected_turns() -> Result<()> {
             data: Vec::new(),
             next_cursor: None,
             backwards_cursor: None,
+            truncated_turn_ids: Vec::new(),
         }
     );
 
@@ -330,12 +334,14 @@ async fn thread_turns_list_can_page_backward_and_forward() -> Result<()> {
             limit: Some(2),
             sort_direction: Some(SortDirection::Desc),
             items_view: None,
+            max_bytes: None,
         })
         .await?;
     let ThreadTurnsListResponse {
         data,
         next_cursor,
         backwards_cursor,
+        ..
     } = timeout(DEFAULT_READ_TIMEOUT, mcp.read_response(read_id)).await??;
     assert_eq!(turn_user_texts(&data), vec!["third", "second"]);
     assert!(
@@ -352,6 +358,7 @@ async fn thread_turns_list_can_page_backward_and_forward() -> Result<()> {
             limit: Some(10),
             sort_direction: Some(SortDirection::Desc),
             items_view: None,
+            max_bytes: None,
         })
         .await?;
     let ThreadTurnsListResponse { data, .. } =
@@ -367,11 +374,71 @@ async fn thread_turns_list_can_page_backward_and_forward() -> Result<()> {
             limit: Some(10),
             sort_direction: Some(SortDirection::Asc),
             items_view: None,
+            max_bytes: None,
         })
         .await?;
     let ThreadTurnsListResponse { data, .. } =
         timeout(DEFAULT_READ_TIMEOUT, mcp.read_response(read_id)).await??;
     assert_eq!(turn_user_texts(&data), vec!["third", "fourth"]);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn thread_turns_list_bounds_oversized_summary_and_advances_cursor() -> Result<()> {
+    let server = create_mock_responses_server_repeating_assistant("Done").await;
+    let codex_home = TempDir::new()?;
+    MockResponsesConfig::new(&server.uri()).write(codex_home.path())?;
+
+    let filename_ts = "2025-01-05T12-00-00";
+    let oversized_text = "界".repeat(4 * 1024 * 1024 / "界".len() + 1);
+    let conversation_id = create_fake_rollout_with_text_elements(
+        codex_home.path(),
+        filename_ts,
+        "2025-01-05T12:00:00Z",
+        oversized_text.as_str(),
+        vec![],
+        Some("mock_provider"),
+        /*git_info*/ None,
+    )?;
+    let rollout_path = rollout_path(codex_home.path(), filename_ts, &conversation_id);
+    for index in 1..=20 {
+        append_user_message(
+            rollout_path.as_path(),
+            format!("2025-01-05T12:{index:02}:00Z").as_str(),
+            format!("message {index}").as_str(),
+        )?;
+    }
+
+    let mut mcp = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .without_auto_env()
+        .build_initialized()
+        .await?;
+
+    let first_page =
+        read_bounded_turns_page(&mut mcp, conversation_id.as_str(), /*cursor*/ None).await?;
+    assert!(serde_json::to_vec(&first_page)?.len() <= BOUNDED_HISTORY_RESULT_BYTES);
+    let truncated_turn_ids = first_page["truncatedTurnIds"]
+        .as_array()
+        .expect("truncatedTurnIds should be present");
+    assert_eq!(truncated_turn_ids.len(), 1);
+    let first_turn_id = first_page["data"][0]["id"]
+        .as_str()
+        .expect("first page turn id");
+    assert_eq!(truncated_turn_ids[0], first_turn_id);
+    let first_cursor = first_page["nextCursor"]
+        .as_str()
+        .expect("bounded first page should have a continuation cursor");
+
+    let second_page =
+        read_bounded_turns_page(&mut mcp, conversation_id.as_str(), Some(first_cursor)).await?;
+    assert!(serde_json::to_vec(&second_page)?.len() <= BOUNDED_HISTORY_RESULT_BYTES);
+    assert_ne!(
+        second_page["data"][0]["id"].as_str(),
+        Some(first_turn_id),
+        "the continuation cursor must advance past the oversized turn"
+    );
 
     Ok(())
 }
@@ -763,6 +830,7 @@ async fn thread_turns_list_reads_store_history_without_rollout_path() -> Result<
                 limit: Some(10),
                 sort_direction: Some(SortDirection::Asc),
                 items_view: None,
+                max_bytes: None,
             },
         })
         .await?
@@ -1047,6 +1115,7 @@ async fn thread_resume_initial_turns_page_matches_requested_turns_list_page() ->
             limit: Some(2),
             sort_direction: Some(SortDirection::Asc),
             items_view: Some(TurnItemsView::NotLoaded),
+            max_bytes: None,
         })
         .await?;
     let turns_list_resp: JSONRPCResponse = timeout(
@@ -1116,6 +1185,7 @@ async fn thread_turns_list_rejects_cursor_when_anchor_turn_is_rolled_back() -> R
             limit: Some(2),
             sort_direction: Some(SortDirection::Desc),
             items_view: None,
+            max_bytes: None,
         })
         .await?;
     let ThreadTurnsListResponse {
@@ -1136,6 +1206,7 @@ async fn thread_turns_list_rejects_cursor_when_anchor_turn_is_rolled_back() -> R
             limit: Some(10),
             sort_direction: Some(SortDirection::Asc),
             items_view: None,
+            max_bytes: None,
         })
         .await?;
     let read_err: JSONRPCError = timeout(
@@ -1481,6 +1552,7 @@ async fn thread_turns_list_rejects_unmaterialized_loaded_thread() -> Result<()> 
             limit: None,
             sort_direction: None,
             items_view: None,
+            max_bytes: None,
         })
         .await?;
     let read_err: JSONRPCError = timeout(
@@ -1725,6 +1797,19 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         turns_backwards_cursor.expect("resume should return a turn head cursor");
     let items_backwards_cursor =
         items_backwards_cursor.expect("resume should return an item head cursor");
+
+    let thread_id_string = thread_id.to_string();
+    let bounded_page =
+        read_bounded_turns_page(&mut mcp, thread_id_string.as_str(), /*cursor*/ None).await?;
+    assert!(serde_json::to_vec(&bounded_page)?.len() <= BOUNDED_HISTORY_RESULT_BYTES);
+    assert_eq!(
+        bounded_page["data"]
+            .as_array()
+            .expect("bounded paginated turns")
+            .len(),
+        2
+    );
+    assert_eq!(bounded_page["truncatedTurnIds"], json!([]));
 
     let rejoin_id = mcp
         .send_thread_resume_request(ThreadResumeParams {
@@ -2098,6 +2183,7 @@ async fn read_single_turn_items_view(
             limit: Some(10),
             sort_direction: Some(SortDirection::Asc),
             items_view,
+            max_bytes: None,
         })
         .await?;
     let read_resp: JSONRPCResponse = timeout(
@@ -2109,6 +2195,33 @@ async fn read_single_turn_items_view(
         to_response::<ThreadTurnsListResponse>(read_resp)?;
     assert_eq!(data.len(), 1);
     Ok(data.remove(0))
+}
+
+async fn read_bounded_turns_page(
+    mcp: &mut TestAppServer,
+    thread_id: &str,
+    cursor: Option<&str>,
+) -> Result<Value> {
+    let request_id = mcp
+        .send_raw_request(
+            "thread/turns/list",
+            Some(json!({
+                "threadId": thread_id,
+                "cursor": cursor,
+                "limit": 20,
+                "sortDirection": "asc",
+                "itemsView": "summary",
+                "maxBytes": BOUNDED_HISTORY_RESULT_BYTES,
+            })),
+        )
+        .await?;
+    let response: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    assert!(serde_json::to_vec(&response)?.len() < DESKTOP_JSONL_MAX_LINE_BYTES);
+    to_response(response)
 }
 
 async fn read_turns_page(
@@ -2126,6 +2239,7 @@ async fn read_turns_page(
             limit,
             sort_direction: Some(sort_direction),
             items_view,
+            max_bytes: None,
         })
         .await?;
     let response: JSONRPCResponse = timeout(
