@@ -1,0 +1,235 @@
+.card {
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 20px 54px rgb(20 54 46 / 6%);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: linear-gradient(110deg, rgb(20 125 106 / 7%), transparent 48%);
+}
+
+.eyebrow,
+.title,
+.description,
+.placeholder p,
+.errorPanel p {
+  margin: 0;
+}
+
+.eyebrow {
+  margin-bottom: var(--space-1);
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.description {
+  max-width: 610px;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.count,
+.selectedLabel,
+.status {
+  height: fit-content;
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.count {
+  flex: none;
+  border: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-family: var(--font-code);
+}
+
+.body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+
+.placeholder {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-6);
+  border: var(--border-width) dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.placeholder > span,
+.threadMark {
+  display: grid;
+  place-items: center;
+  color: var(--color-accent);
+  font-family: var(--font-code);
+  font-weight: 700;
+}
+
+.placeholder > span {
+  width: 40px;
+  height: 40px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.placeholder p {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.errorPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-danger-border);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
+.errorPanel button,
+.loadMore {
+  min-height: 38px;
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.errorPanel button:disabled,
+.loadMore:disabled,
+.threadButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  min-width: 0;
+}
+
+.threadButton {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.threadButton:hover,
+.threadButton[aria-current="true"] {
+  border-color: var(--color-success-border);
+  background: var(--color-success-muted);
+}
+
+.threadMark {
+  min-height: 22px;
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.titleLine {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.titleLine strong,
+.preview {
+  overflow-wrap: anywhere;
+}
+
+.selectedLabel {
+  background: var(--color-accent);
+  color: var(--color-surface);
+}
+
+.status {
+  border: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.status[data-status="active"] {
+  border-color: var(--color-success-border);
+  background: var(--color-success-muted);
+  color: var(--color-accent);
+}
+
+.status[data-status="systemError"] {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
+.preview {
+  color: var(--color-text-muted);
+}
+
+.timestamp {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.loadMore {
+  justify-self: center;
+  color: var(--color-accent);
+}
+
+@media (max-width: 620px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .count {
+    align-self: flex-start;
+  }
+}

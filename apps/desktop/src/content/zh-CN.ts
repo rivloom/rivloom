@@ -67,6 +67,37 @@ export const zhCN = {
       recentProjectsNotSaved: "项目已打开，但最近项目未能保存。",
     },
   },
+  thread: {
+    eyebrow: "Project threads",
+    title: "项目会话",
+    description:
+      "查看该项目已有的会话摘要；选择会话不会恢复聊天或发送模型请求。",
+    count: (count: number) => `${count} / 500`,
+    untitled: "未命名会话",
+    selectedLabel: "当前会话",
+    updatedAt: (timestamp: string) => `最近更新 ${timestamp}`,
+    status: {
+      notLoaded: "未载入",
+      idle: "可继续",
+      systemError: "异常",
+      active: "进行中",
+    },
+    actions: {
+      read: (title: string, status: string, selected: boolean) =>
+        `查看会话 ${title}，状态${status}${selected ? "，当前会话" : ""}`,
+      retry: "重新加载会话",
+      loadMore: "加载更多会话",
+      loadingMore: "正在加载更多…",
+    },
+    loading: {
+      title: "正在读取项目会话…",
+      description: "Rivloom 正在读取这个目录下的有界会话摘要。",
+    },
+    empty: {
+      title: "还没有项目会话",
+      description: "使用“新建会话”创建第一条空会话；不会自动发送模型请求。",
+    },
+  },
   account: {
     eyebrow: "账号访问",
     title: "ChatGPT 账号",
