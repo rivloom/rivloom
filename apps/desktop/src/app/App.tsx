@@ -23,12 +23,10 @@ export function App() {
   const [activeProject, setActiveProject] = useState<LocalProject | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [lastConfirmedSignedIn, setLastConfirmedSignedIn] = useState(false);
-  const disconnectedSession =
-    !runtimeConnected &&
-    lastConfirmedSignedIn &&
-    account.status.state !== "signedOut";
+  const retainedSignedInSession =
+    lastConfirmedSignedIn && account.status.state !== "signedOut";
   const showWorkspace =
-    (signedIn || disconnectedSession) &&
+    (signedIn || retainedSignedInSession) &&
     activeProject !== null &&
     workspaceOpen;
   const projectExperience = projectAccessReady || showWorkspace;
@@ -52,6 +50,8 @@ export function App() {
     <AppShell
       runtimeStatus={runtimeStatus}
       stage={projectExperience ? zhCN.navigation.projectStage : undefined}
+      currentView={showWorkspace ? "projectWorkspace" : "overview"}
+      onNavigateOverview={() => setWorkspaceOpen(false)}
     >
       {showWorkspace ? (
         <ProjectWorkspace

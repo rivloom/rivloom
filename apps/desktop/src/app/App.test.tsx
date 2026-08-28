@@ -33,6 +33,16 @@ const project = {
   lastOpenedAt: 1_787_827_600,
   availability: "available" as const,
 };
+const projectThread = {
+  id: "thread-a",
+  name: "Reconnect Thread",
+  preview: "Keep this selected summary across a runtime reconnect.",
+  cwd: project.path,
+  createdAt: 1_787_827_000,
+  updatedAt: 1_787_827_600,
+  recencyAt: 1_787_827_600,
+  status: "idle" as const,
+};
 const connectedRuntime = {
   state: "connected",
   appVersion: "0.1.0",
@@ -197,11 +207,22 @@ describe("App", () => {
       [project.id, true],
     ]);
 
+    const overviewLink = screen.getByRole("link", { name: "概览" });
+    expect(overviewLink).not.toHaveAttribute("aria-current");
+    await user.click(overviewLink);
+    expect(
+      screen.queryByRole("region", { name: "项目工作区 Project A" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("当前项目")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /打开项目 Project A/ }),
+    );
     await user.click(screen.getByRole("button", { name: "返回项目首页" }));
     expect(screen.getByText("当前项目")).toBeInTheDocument();
   });
 
-  it("keeps an opened workspace visible during a runtime disconnect", async () => {
+  it("retains the workspace through reconnect until explicit sign-out", async () => {
     const user = userEvent.setup();
     hookMocks.useRuntimeStatus.mockReturnValue({
       retry: vi.fn(),
@@ -215,11 +236,28 @@ describe("App", () => {
       ...projects(),
       state: { state: "ready", projects: [project] },
     });
+    const threadActions = {
+      ...threads(),
+      readThread: vi.fn().mockResolvedValue(projectThread),
+      state: {
+        state: "ready",
+        threads: [projectThread],
+        nextCursor: null,
+      },
+    };
+    hookMocks.useProjectThreads.mockReturnValue(threadActions);
     const { rerender } = render(<App />);
 
     await user.click(
       screen.getByRole("button", { name: "打开项目 Project A" }),
     );
+    await user.click(
+      screen.getByRole("button", { name: /查看会话 Reconnect Thread/ }),
+    );
+    expect(
+      screen.getByRole("region", { name: projectThread.name }),
+    ).toBeInTheDocument();
+
     hookMocks.useRuntimeStatus.mockReturnValue({
       retry: vi.fn(),
       retrying: false,
@@ -235,17 +273,37 @@ describe("App", () => {
       false,
     );
 
+    hookMocks.useRuntimeStatus.mockReturnValue({
+      retry: vi.fn(),
+      retrying: false,
+      status: connectedRuntime,
+    });
+    rerender(<App />);
+    expect(
+      screen.getByRole("region", { name: "项目工作区 Project A" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: projectThread.name }),
+    ).toBeInTheDocument();
+    expect(hookMocks.useProjectThreads).toHaveBeenLastCalledWith(
+      project.id,
+      true,
+    );
+
+    hookMocks.useAccountStatus.mockReturnValue(
+      account({ state: "signedIn", email: null, planType: "plus" }),
+    );
+    rerender(<App />);
+    expect(
+      screen.getByRole("region", { name: projectThread.name }),
+    ).toBeInTheDocument();
+
     hookMocks.useAccountStatus.mockReturnValue(account({ state: "signedOut" }));
     rerender(<App />);
     expect(
       screen.queryByRole("region", { name: "项目工作区 Project A" }),
     ).not.toBeInTheDocument();
 
-    hookMocks.useRuntimeStatus.mockReturnValue({
-      retry: vi.fn(),
-      retrying: false,
-      status: connectedRuntime,
-    });
     hookMocks.useAccountStatus.mockReturnValue(
       account({ state: "signedIn", email: null, planType: "plus" }),
     );

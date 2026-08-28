@@ -9,10 +9,18 @@ import styles from "./AppShell.module.css";
 type AppShellProps = {
   runtimeStatus: RuntimeStatus;
   stage?: { title: string; description: string };
+  currentView?: "overview" | "projectWorkspace";
+  onNavigateOverview?: () => void;
   children: ReactNode;
 };
 
-export function AppShell({ runtimeStatus, stage, children }: AppShellProps) {
+export function AppShell({
+  runtimeStatus,
+  stage,
+  currentView = "overview",
+  onNavigateOverview,
+  children,
+}: AppShellProps) {
   const statusCopy = getStatusBarCopy(runtimeStatus.state);
   const stageCopy = stage ?? {
     title: zhCN.navigation.stageTitle,
@@ -37,9 +45,12 @@ export function AppShell({ runtimeStatus, stage, children }: AppShellProps) {
       <aside className={styles.sidebar}>
         <nav aria-label={zhCN.navigation.label}>
           <a
-            className={styles.activeNavItem}
+            className={
+              currentView === "overview" ? styles.activeNavItem : styles.navItem
+            }
             href="#overview"
-            aria-current="page"
+            aria-current={currentView === "overview" ? "page" : undefined}
+            onClick={onNavigateOverview}
           >
             <span className={styles.navMarker} aria-hidden="true" />
             {zhCN.navigation.overview}
