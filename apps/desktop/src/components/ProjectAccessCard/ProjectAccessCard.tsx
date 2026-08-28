@@ -140,9 +140,10 @@ function ProjectRow({
   onRemove: (projectId: string) => void;
 }) {
   const available = project.availability === "available";
-  const availability = available
-    ? null
-    : zhCN.project.availability[project.availability];
+  const availability =
+    project.availability === "available"
+      ? null
+      : zhCN.project.availability[project.availability];
 
   return (
     <li className={`${styles.projectRow} ${active ? styles.activeRow : ""}`}>
