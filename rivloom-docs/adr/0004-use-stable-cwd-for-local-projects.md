@@ -6,7 +6,7 @@ Proposed
 
 ## 背景
 
-Rivloom A2 需要让用户选择本地目录、维护最近项目，并按项目创建、列出、读取和恢复
+Rivloom A2 需要让用户选择本地目录、维护最近项目，并按项目创建、列出和读取
 Codex thread。App Server v2 同时提供两组相关能力：稳定的 thread `cwd` 字段和筛选，
 以及实验性的 `project/*`、thread `projectId`。
 
@@ -21,12 +21,16 @@ Rivloom 在自己的本地应用数据目录中维护一个有界的最近项目
 
 - `thread/start` 通过稳定的 `cwd` 创建项目会话。
 - `thread/list` 通过稳定的 `cwd` 精确筛选项目会话。
-- `thread/read` 和 `thread/resume` 使用稳定的 thread ID，并核对返回的 `cwd`。
+- `thread/read` 使用稳定的 thread ID，并在返回摘要前核对原始 `cwd`。
+- A2 不调用 `thread/resume`。稳定 resume 会返回完整 turns，真实恢复与有界历史加载在 A3
+  统一设计。
 - 初始化不启用 `experimentalApi`，请求中不发送 `projectId`。
 
-目录选择由 Tauri 官方对话框插件发起，所有路径在 Rust 后端重新验证；React 不获得
-任意文件读写能力。选择项目或浏览历史不会调用 `turn/start`，只有用户明确创建会话时
-才调用 `thread/start`，仍不会触发模型请求。
+目录选择由固定 Rust/Tauri 命令通过官方对话框插件发起，选择结果直接在后端验证和
+登记；React 不接收可回传为授权依据的任意路径，也不获得任意文件读写能力。选择项目
+或浏览历史不会调用 `turn/start`，只有用户明确创建会话时才调用 `thread/start`，仍不会
+触发模型请求。App Server 可能按既有规则读取项目级配置或指令并记录目录信任状态，
+Rivloom 项目服务本身不扫描或读取项目文件内容。
 
 ## 结果
 
@@ -39,7 +43,7 @@ Rivloom 在自己的本地应用数据目录中维护一个有界的最近项目
 
 ### 负面
 
-- 最近项目元数据由 Rivloom 单独持久化，需处理损坏、迁移和原子写入。
+- 最近项目元数据由 Rivloom 单独持久化，需处理损坏、迁移、并发和跨平台原子替换。
 - 第一版不支持一个项目包含多个目录根。
 - 目录移动后旧 thread 不会自动归入新路径，需要用户重新选择或未来显式迁移。
 

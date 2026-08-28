@@ -2,9 +2,9 @@
 
 > **For Codex/Claude:** REQUIRED SKILL: Use `executing-plans` to implement this plan task-by-task in a dedicated worktree.
 
-**Goal:** Add safe local project selection, a bounded recent-project list, and stable `cwd`-scoped thread listing, creation, reading, and resume without starting model turns.
+**Goal:** Add safe local project selection, a bounded recent-project list, and stable `cwd`-scoped thread listing, creation, and metadata reading without starting model turns or resuming thread history.
 
-**Architecture:** Rust validates and persists selected directories, exposes normalized project/thread contracts, and calls only stable App Server thread APIs through a snapshot of the active connection. React receives no file contents; it uses the official Tauri dialog permission for folder selection and controlled commands for all project state. The implementation is split into three reviewable PRs: backend core, desktop bridge, and UI.
+**Architecture:** A fixed Rust/Tauri command opens the official directory dialog, validates and registers the selected directory, and returns an opaque project ID plus display metadata. React receives no file contents and cannot submit an arbitrary cwd as authorization. Rust calls only stable App Server list/start/read APIs through a snapshot of the active connection. Seven small implementation PRs separate storage, selection, protocol, commands, frontend state, and the two UI surfaces.
 
 **Tech Stack:** Rust 2024, Tauri 2, serde/serde_json, dunce, tauri-plugin-dialog, React 19, TypeScript 5.9, Vitest and Testing Library.
 
@@ -17,12 +17,15 @@
 - Work only under `apps/desktop` and `rivloom-docs`; do not modify `codex-rs`.
 - Do not enable `capabilities.experimentalApi`, send `projectId`, or call `project/*`.
 - Do not call `turn/start`; selecting/opening a project must consume no model quota.
-- Never read project file contents. Only validate metadata for the selected directory itself.
+- Do not call `thread/resume`; bounded history loading and subscriptions belong to A3.
+- Rivloom project code must not read project file contents. App Server may still load project-local
+  configuration or instructions when the user explicitly creates a thread.
 - Do not log complete App Server payloads, thread history, account data, or directory contents.
-- Keep recent projects at 20 and thread pages at 50 or less.
+- Keep recent projects at 20, thread pages at 50 or less, accumulated summaries at 500 or less, and
+  opaque cursors at 4 KiB or less.
 - Run `just fmt` in `apps/desktop` after code changes, then tests; do not accept unrelated CRLF churn.
 
-## Stage A2.1 — Backend project core
+## Stage A2.1 — Recent-project contracts and storage
 
 ### Task 1: Add project contracts and versioned recent-project storage
 
@@ -37,10 +40,10 @@
 - Create: `apps/desktop/src-tauri/src/project/storage_tests.rs`
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
 
-**Step 1: Add test-only filesystem support and path normalization dependencies**
+**Step 1: Add test-only filesystem support**
 
-Add direct `dunce = "1"` and dev dependency `tempfile = "3"`. Do not add a database or a general
-settings framework. Regenerate the desktop-local Cargo lock through Cargo.
+Add dev dependency `tempfile = "3"`. Do not add path-normalization dependencies, a database, or a
+general settings framework in this PR. Regenerate the desktop-local Cargo lock through Cargo.
 
 **Step 2: Write failing contract tests**
 
@@ -50,6 +53,7 @@ Use `pretty_assertions::assert_eq` on complete serialized values. Define this fr
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LocalProject {
+    pub id: String,
     pub path: String,
     pub name: String,
     pub last_opened_at: i64,
@@ -70,15 +74,20 @@ Expected: FAIL because the project module and contracts do not exist.
 
 Store `{ "version": 1, "projects": [...] }` at
 `app_local_data_dir/settings/recent-projects-v1.json`. Load missing files as empty. Reject unknown
-future versions without overwriting them. Save through a same-directory temporary file, flush and
-sync before replacement. Sort by `last_opened_at` descending, de-duplicate by normalized path, and
-truncate to 20.
+future versions without overwriting them. Quarantine invalid JSON without logging its contents. Save
+through a uniquely named same-directory temporary file, flush and sync before platform-specific
+atomic replacement. On Windows use replace-existing semantics without deleting the destination
+first; on Unix rename then best-effort sync the parent directory. Replacement failure must preserve
+the old file and clean up the temporary file. Sort by `last_opened_at` descending, de-duplicate by
+the persisted identity key, and truncate to 20. Require either the application's single-instance
+guarantee or a cross-process storage lock before enabling writes.
 
 **Step 5: Add storage behavior tests**
 
-Test complete loaded lists for missing file, valid file, duplicate paths, more than 20 entries,
-invalid JSON, unknown version, and a parent path that makes saving fail. Assert that invalid data is
-never echoed in returned errors.
+Test complete loaded lists for missing file, valid file, duplicate identities, more than 20 entries,
+invalid JSON quarantine, unknown version, two consecutive saves, replacement failure preserving the
+old file, temporary-file cleanup, and a parent path that makes saving fail. Assert that invalid data
+is never echoed in returned errors.
 
 **Step 6: Run the focused tests**
 
@@ -92,7 +101,9 @@ Expected: PASS.
 feat(desktop): add recent project storage
 ```
 
-### Task 2: Validate selected directories and manage recent projects
+## Stage A2.2 — Backend directory selection and project registry
+
+### Task 2: Select, validate, and manage recent projects
 
 **Files:**
 
@@ -101,13 +112,16 @@ feat(desktop): add recent project storage
 - Create: `apps/desktop/src-tauri/src/project/state.rs`
 - Modify: `apps/desktop/src-tauri/src/project/mod.rs`
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
+- Modify: `apps/desktop/src-tauri/Cargo.toml`
+- Modify: `apps/desktop/src-tauri/Cargo.lock`
 
 **Step 1: Write failing service tests**
 
-Use real temporary directories and whole-object assertions. Cover absolute/canonical output,
-relative input rejection, file-not-directory rejection, symlink normalization where supported,
-reopening updates recency without duplication, remove is idempotent, and saved missing directories
-remain visible as unavailable.
+Use real temporary directories and whole-object assertions. Cover backend dialog cancellation,
+absolute/canonical output, file-not-directory rejection, symlink/junction normalization where
+supported, Windows case-insensitive and Unix exact identity, non-UTF-8 rejection without lossy
+conversion, reopening updates recency without duplication, remove is idempotent, unreadable paths
+produce zero App Server requests, and saved missing directories remain visible as unavailable.
 
 **Step 2: Verify failure**
 
@@ -117,14 +131,17 @@ Expected: FAIL because `ProjectService` is missing.
 
 **Step 3: Implement minimal path validation**
 
-Use `dunce::canonicalize`, `metadata().is_dir()`, and a non-recursive directory open/readability
-check. Derive the display name from `file_name`, falling back to the normalized path for roots. Keep
-all OS detail in backend diagnostics and return fixed Chinese categories to the frontend.
+Add direct `dunce = "1"`. A fixed Rust/Tauri command opens the official folder dialog and sends its
+result directly to `ProjectService`; no command accepts an arbitrary path from React as proof of
+selection. Use `dunce::canonicalize`, `metadata().is_dir()`, and an injected non-recursive
+readability check. Reject paths that cannot be represented losslessly as App Server UTF-8 cwd.
+Derive the display name from `file_name`, falling back to the normalized path for roots. Derive an
+opaque project ID from the platform identity key and keep all OS detail in backend diagnostics.
 
 **Step 4: Implement `ProjectState`**
 
 Own a `Mutex<ProjectService>` created with the settings file path. Expose named methods
-`list_recent`, `open_selected`, and `remove_recent`; avoid ambiguous boolean parameters. A save
+`list_recent`, `select_project`, `lookup_project`, and `remove_recent`; avoid ambiguous boolean parameters. A save
 failure returns the opened project plus a nonfatal persistence warning rather than pretending the
 directory itself failed.
 
@@ -135,6 +152,8 @@ Run: `cargo test --manifest-path src-tauri/Cargo.toml project::`
 Expected: PASS.
 
 Commit: `feat(desktop): validate local project selection`
+
+## Stage A2.3 — Stable thread core
 
 ### Task 3: Expose a nonblocking active App Server connection snapshot
 
@@ -194,12 +213,12 @@ For fake connection requests, deep-compare exact method and params:
 {"method":"thread/list","params":{"cwd":"<normalized>","limit":50,"sortKey":"recency_at","sortDirection":"desc"}}
 {"method":"thread/start","params":{"cwd":"<normalized>"}}
 {"method":"thread/read","params":{"threadId":"thr-1","includeTurns":false}}
-{"method":"thread/resume","params":{"threadId":"thr-1","cwd":"<normalized>"}}
 ```
 
 Cover pagination cursor pass-through, field whitelist parsing, missing required fields, malformed
-timestamps, sanitized remote errors, disconnect, and response `cwd` mismatch. Assert recorded method
-names contain no `turn/start` or `project/` prefix.
+timestamps, sanitized remote errors, disconnect, response `cwd` mismatch, a response over 50 items,
+a cursor over 4 KiB, oversized preview/name fields, and a 500-item accumulated-summary boundary.
+Assert recorded method names contain no `thread/resume`, `turn/start`, or `project/` prefix.
 
 **Step 2: Verify failure**
 
@@ -215,9 +234,10 @@ experimental project metadata.
 
 **Step 4: Implement thread service methods**
 
-Use named methods `list_threads`, `start_thread`, `read_thread`, and `resume_thread`. Every method
-receives a validated `LocalProject` and a connection snapshot. Verify returned cwd equality before
-returning normalized data. Limit list requests to 50 even if a future caller asks for more.
+Use named methods `list_threads`, `start_thread`, and `read_thread`. Every method receives a project
+resolved from the backend registry and a connection snapshot. Verify returned cwd equality before
+returning normalized data. Limit requests and responses to 50, reject oversized cursors and fields,
+and stop pagination after 500 accumulated summaries.
 
 **Step 5: Run project and App Server tests**
 
@@ -229,16 +249,16 @@ Expected: PASS.
 
 **Step 6: Commit**
 
-Commit: `feat(desktop): add cwd scoped thread service`
+Commit: `feat(desktop): add bounded cwd scoped thread service`
 
-## Stage A2.2 — Tauri and React boundary
+Tasks 3 and 4 form one reviewable PR because the connection accessor has no standalone consumer.
 
-### Task 5: Register dialog permission and project commands
+## Stage A2.4 — Fixed Tauri project commands
+
+### Task 5: Register backend dialog integration and project commands
 
 **Files:**
 
-- Modify: `apps/desktop/package.json`
-- Modify: `pnpm-lock.yaml`
 - Modify: `apps/desktop/src-tauri/Cargo.toml`
 - Modify: `apps/desktop/src-tauri/Cargo.lock`
 - Modify: `apps/desktop/src-tauri/capabilities/default.json`
@@ -248,24 +268,27 @@ Commit: `feat(desktop): add cwd scoped thread service`
 
 **Step 1: Add official dialog dependencies**
 
-Add matching Tauri 2 versions of `@tauri-apps/plugin-dialog` and `tauri-plugin-dialog`. Register the
-plugin and add only `dialog:allow-open`; do not add filesystem plugin permissions.
+Add a matching Tauri 2 version of the Rust `tauri-plugin-dialog` crate and register it. The fixed
+backend selection command owns the dialog interaction; do not add the JavaScript dialog package,
+frontend `dialog:allow-open`, or filesystem plugin permissions.
 
 **Step 2: Write failing command tests**
 
-Cover `list_recent_projects`, `open_project`, `remove_recent_project`, `list_project_threads`,
-`start_project_thread`, `read_project_thread`, and `resume_project_thread`. Disconnected thread
+Cover `list_recent_projects`, `select_project`, `remove_recent_project`, `list_project_threads`,
+`start_project_thread`, and `read_project_thread`. Disconnected thread
 commands must return one safe error contract; local recent-project commands must still work.
+Assert commands accept only opaque project IDs after selection and that an injected arbitrary path
+cannot be used to create an authorization record.
 
 **Step 3: Implement commands with blocking work off the UI thread**
 
-Resolve `ProjectState` and `AppServerState` from `AppHandle` inside `spawn_blocking`. Validate the
-project path again on every App Server operation. Never accept a caller-provided cwd separate from
-the selected project path.
+Resolve `ProjectState` and `AppServerState` from `AppHandle` inside `spawn_blocking`. Look up the
+opaque project ID and validate its registered path again on every App Server operation. Never accept
+a caller-provided path or cwd after the backend dialog selection.
 
 **Step 4: Register state and handlers**
 
-Create `settings` beside `codex-home`, manage `ProjectState`, and register all seven commands in
+Create `settings` beside `codex-home`, manage `ProjectState`, and register all six commands in
 `generate_handler!`. Preserve current account initialization and shutdown order.
 
 **Step 5: Run Rust tests and checks**
@@ -279,6 +302,8 @@ Expected: all tests and checks PASS.
 **Step 6: Commit**
 
 Commit: `feat(desktop): expose local project commands`
+
+## Stage A2.5 — Typed React boundary
 
 ### Task 6: Add typed frontend bridge and race-safe hooks
 
@@ -294,9 +319,9 @@ Commit: `feat(desktop): expose local project commands`
 
 **Step 1: Write failing bridge tests**
 
-Mock Tauri dialog and invoke. Assert cancel performs no invoke; a selected path invokes
-`open_project` exactly once; every other command uses fixed names and camelCase params. Use complete
-object comparisons for returned project/thread pages.
+Mock only fixed Tauri invokes. Assert `select_project` cancellation leaves state unchanged and never
+returns an unregistered path; every other command sends a project ID and fixed camelCase params.
+Use complete object comparisons for returned project/thread pages.
 
 **Step 2: Verify failure**
 
@@ -306,8 +331,9 @@ Expected: FAIL because the bridge is missing.
 
 **Step 3: Implement bridge and discriminated contracts**
 
-Keep dialog access in one function. Export no raw `invoke` or generic method caller. Model loading,
-ready, empty, and error states as discriminated unions instead of boolean combinations.
+Export no raw `invoke`, generic method caller, direct dialog API, path-accepting open method, or cwd
+parameter. Model loading, ready, empty, and error states as discriminated unions instead of boolean
+combinations.
 
 **Step 4: Write and implement hook race tests**
 
@@ -325,7 +351,7 @@ Expected: PASS.
 
 Commit: `feat(desktop): add local project frontend bridge`
 
-## Stage A2.3 — Project interface
+## Stage A2.6 — Recent-project home
 
 ### Task 7: Build the recent-project home
 
@@ -365,6 +391,8 @@ Expected: PASS with reviewed snapshots.
 
 Commit: `feat(desktop): add recent project home`
 
+## Stage A2.7 — Bounded thread workspace
+
 ### Task 8: Build the project workspace and thread list
 
 **Files:**
@@ -381,9 +409,10 @@ Commit: `feat(desktop): add recent project home`
 
 **Step 1: Write failing workspace tests and snapshots**
 
-Cover load, empty, failure, retry, pagination, new thread, read then resume, cwd mismatch error,
+Cover load, empty, failure, retry, bounded pagination, new thread, metadata read, cwd mismatch error,
 runtime disconnect, return home, timestamp fallback, active status, keyboard selection, and long
-preview/path wrapping. Assert no test bridge call records `turn/start` or `project/*`.
+preview/path wrapping. Assert no test bridge call records `thread/resume`, `turn/start`, `project/*`,
+an arbitrary path, or cwd.
 
 **Step 2: Verify failure**
 
@@ -393,9 +422,10 @@ Expected: FAIL because workspace components are missing.
 
 **Step 3: Implement project workspace**
 
-Show a bounded thread list and “load more” only when `nextCursor` exists. New thread requires a
-direct user click. Existing thread selection calls read then resume and displays only its normalized
-summary plus the A3 placeholder; do not render or store response turns.
+Show a bounded thread list and “load more” only when `nextCursor` exists and fewer than 500 summaries
+are loaded. New thread requires a direct user click. Existing thread selection calls read only and
+displays its normalized summary plus an explicit A3 chat/resume placeholder; do not resume the
+thread or render/store response turns.
 
 **Step 4: Run focused tests and commit**
 
@@ -431,9 +461,10 @@ PASS. Expected A2 counts must be recorded from the actual run, not predicted.
 
 **Step 3: Run deterministic protocol verification**
 
-Use the fake connection/harness to open, list, start, read, and resume a project thread. Record only
+Use the fake connection/harness to select, list, start, and read a project thread. Record only
 method names and sanitized outcomes. Assert zero `turn/start`, `project/*`, account methods, OAuth
-values, project file reads, and model calls.
+values, Rivloom project-service file reads, and model calls. Also assert zero `thread/resume`, and
+record that App Server may independently load project-level configuration on `thread/start`.
 
 **Step 4: Perform deterministic visual checks**
 
@@ -459,6 +490,8 @@ PR only after the user approves the implementation result; do not merge without 
 ## Execution handoff after review
 
 Once the design and ADR are accepted, execute this plan in fresh stage worktrees using the
-`executing-plans` skill. Complete A2.1 first and review its actual diff before creating A2.2; do not
-start all three stages in parallel because they share `lib.rs`, package locks, `App.tsx`, and the
-project contracts.
+`executing-plans` skill. Complete A2.1 first and review its actual diff before creating A2.2. Each
+stage is a separate reviewable PR except Tasks 3 and 4, which land together as A2.3. Do not start
+dependent stages in parallel because they share `lib.rs`, package locks, `App.tsx`, and the project
+contracts. Keep each PR below 800 changed lines and complex logic below 500; split a stage again if
+its actual diff crosses either boundary.
