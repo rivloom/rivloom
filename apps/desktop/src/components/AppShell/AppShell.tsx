@@ -8,11 +8,16 @@ import styles from "./AppShell.module.css";
 
 type AppShellProps = {
   runtimeStatus: RuntimeStatus;
+  stage?: { title: string; description: string };
   children: ReactNode;
 };
 
-export function AppShell({ runtimeStatus, children }: AppShellProps) {
+export function AppShell({ runtimeStatus, stage, children }: AppShellProps) {
   const statusCopy = getStatusBarCopy(runtimeStatus.state);
+  const stageCopy = stage ?? {
+    title: zhCN.navigation.stageTitle,
+    description: zhCN.navigation.stageDescription,
+  };
 
   return (
     <div className={styles.shell}>
@@ -43,8 +48,8 @@ export function AppShell({ runtimeStatus, children }: AppShellProps) {
 
         <section className={styles.stageNote} aria-labelledby="stage-title">
           <p>{zhCN.navigation.stageLabel}</p>
-          <h2 id="stage-title">{zhCN.navigation.stageTitle}</h2>
-          <span>{zhCN.navigation.stageDescription}</span>
+          <h2 id="stage-title">{stageCopy.title}</h2>
+          <span>{stageCopy.description}</span>
         </section>
       </aside>
 
