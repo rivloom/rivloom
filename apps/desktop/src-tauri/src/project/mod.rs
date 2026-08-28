@@ -4,3 +4,5 @@ mod state;
 mod storage;
 mod thread_service;
 mod types;
+
+pub(crate) use state::ProjectState;

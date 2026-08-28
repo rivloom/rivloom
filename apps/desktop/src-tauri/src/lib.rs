@@ -2,7 +2,7 @@ mod account;
 mod app_server;
 #[allow(
     dead_code,
-    reason = "A2.1 defines project contracts and storage before A2.2 wires commands"
+    reason = "A2.4a registers project state before A2.4b exposes fixed commands"
 )]
 mod project;
 pub mod runtime_status;
@@ -11,6 +11,7 @@ use account::AccountCommand;
 use account::AccountState;
 use account::AccountStatus;
 use app_server::state::AppServerState;
+use project::ProjectState;
 use runtime_status::RuntimeStatus;
 use tauri::AppHandle;
 use tauri::Manager;
@@ -83,7 +84,17 @@ fn account_command_error_status() -> AccountStatus {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
+        |app, _arguments, _working_directory| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        },
+    ));
+    let app = builder
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
@@ -94,7 +105,8 @@ pub fn run() {
             logout_account,
         ])
         .setup(|app| {
-            let codex_home = app.path().app_local_data_dir()?.join("codex-home");
+            let app_data = app.path().app_local_data_dir()?;
+            let codex_home = app_data.join("codex-home");
             let account_state = AccountState::new(app.handle().clone());
             let account_service = account_state.service();
             if !app.manage(account_state) {
@@ -103,6 +115,11 @@ pub fn run() {
             let state = AppServerState::new(app.handle().clone(), codex_home, account_service);
             if !app.manage(state) {
                 return Err(std::io::Error::other("App Server state was already managed").into());
+            }
+            let project_state =
+                ProjectState::new(app_data.join("settings").join("recent-projects-v1.json"));
+            if !app.manage(project_state) {
+                return Err(std::io::Error::other("Project state was already managed").into());
             }
 
             let app_handle = app.handle().clone();
