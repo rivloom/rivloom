@@ -2,7 +2,7 @@
 
 ## 状态
 
-Proposed
+Accepted
 
 ## 背景
 
@@ -68,7 +68,7 @@ Rivloom 项目服务本身不扫描或读取项目文件内容。
 ## 参考资料
 
 - [Rivloom Desktop 架构设计](../plans/2026-08-24-rivloom-desktop-architecture-design.md)
-- [A2 本地项目与会话设计草案](../plans/2026-08-27-desktop-local-projects-and-threads-design.md)
+- [A2 本地项目与会话设计](../plans/2026-08-27-desktop-local-projects-and-threads-design.md)
 - `codex-rs/app-server/README.md`
 - `codex-rs/app-server-protocol/src/protocol/v2/thread.rs`
 - `codex-rs/app-server-protocol/src/protocol/v2/project.rs`
