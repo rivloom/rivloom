@@ -98,6 +98,26 @@ export const zhCN = {
       description: "使用“新建会话”创建第一条空会话；不会自动发送模型请求。",
     },
   },
+  workspace: {
+    label: (name: string) => `项目工作区 ${name}`,
+    eyebrow: "Local project",
+    pathLabel: "项目目录",
+    actions: {
+      back: "返回项目首页",
+      start: "新建会话",
+      starting: "正在新建…",
+    },
+    disconnected: {
+      title: "核心服务连接中断",
+      description: "项目元数据仍保留在本页；连接恢复后可重新加载会话。",
+    },
+    selection: {
+      eyebrow: "Selected thread",
+      placeholderTitle: "聊天与恢复将在 A3 接入",
+      placeholderDescription:
+        "A2 只读取这条会话的归一化摘要，不载入历史消息，也不会发送模型请求。",
+    },
+  },
   account: {
     eyebrow: "账号访问",
     title: "ChatGPT 账号",
