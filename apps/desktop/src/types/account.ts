@@ -3,11 +3,6 @@ export type AccountStatus =
   | { state: "signedOut" }
   | { state: "browserPending" }
   | {
-      state: "devicePending";
-      verificationUrl: string;
-      userCode: string;
-    }
-  | {
       state: "signedIn";
       email: string | null;
       planType: string;

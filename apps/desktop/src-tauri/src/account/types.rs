@@ -10,10 +10,6 @@ pub(crate) enum AccountStatus {
     Checking,
     SignedOut,
     BrowserPending,
-    DevicePending {
-        verification_url: String,
-        user_code: String,
-    },
     SignedIn {
         email: Option<String>,
         plan_type: String,

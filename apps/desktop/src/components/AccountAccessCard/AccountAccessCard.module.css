@@ -75,7 +75,7 @@
   font-weight: 700;
 }
 
-.stateMark:is(.checking, .browserPending, .devicePending) {
+.stateMark:is(.checking, .browserPending) {
   border-color: var(--color-warning-border);
   background: var(--color-warning-muted);
   color: var(--color-warning);
@@ -133,7 +133,7 @@
   background: currentcolor;
 }
 
-.badge:is(.checking, .browserPending, .devicePending) {
+.badge:is(.checking, .browserPending) {
   border-color: var(--color-warning-border);
   background: var(--color-warning-muted);
   color: var(--color-warning);
@@ -161,8 +161,7 @@
 .primaryButton,
 .secondaryButton,
 .ghostButton,
-.dangerButton,
-.copyButton {
+.dangerButton {
   min-height: 38px;
   padding: var(--space-2) var(--space-4);
   border: var(--border-width) solid transparent;
@@ -177,8 +176,7 @@
   color: var(--color-surface);
 }
 
-.secondaryButton,
-.copyButton {
+.secondaryButton {
   border-color: var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
@@ -198,16 +196,14 @@
 .primaryButton:hover:not(:disabled),
 .secondaryButton:hover:not(:disabled),
 .ghostButton:hover:not(:disabled),
-.dangerButton:hover:not(:disabled),
-.copyButton:hover:not(:disabled) {
+.dangerButton:hover:not(:disabled) {
   opacity: 0.82;
 }
 
 .primaryButton:disabled,
 .secondaryButton:disabled,
 .ghostButton:disabled,
-.dangerButton:disabled,
-.copyButton:disabled {
+.dangerButton:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -253,43 +249,6 @@
   overflow-wrap: anywhere;
 }
 
-.verificationUrl {
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.deviceCode {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.deviceCode code {
-  color: var(--color-accent-hover);
-  font-family: var(--font-code);
-  font-size: clamp(16px, 2vw, 20px);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-
-.copyButton {
-  min-height: 32px;
-  padding: var(--space-1) var(--space-3);
-  font-size: 12px;
-}
-
-.copyFeedback {
-  margin: var(--space-2) 0 0 60px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.copyFeedback[role="alert"] {
-  color: var(--color-danger);
-}
-
 .dialogBackdrop {
   position: fixed;
   z-index: 20;
@@ -330,8 +289,7 @@
 @media (max-width: 760px) {
   .actions,
   .pendingHint,
-  .detailPanel,
-  .copyFeedback {
+  .detailPanel {
     margin-left: 0;
   }
 
@@ -347,10 +305,5 @@
 
   .actions > button {
     width: 100%;
-  }
-
-  .deviceCode {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }

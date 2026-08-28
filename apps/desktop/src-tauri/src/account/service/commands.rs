@@ -8,10 +8,8 @@ use crate::account::types::AccountStatus;
 pub(crate) enum AccountCommand {
     GetStatus,
     StartChatgptLogin,
-    StartDeviceCodeLogin,
     CancelLogin,
     Logout,
-    OpenDeviceVerification,
 }
 
 impl AccountService {
@@ -27,10 +25,8 @@ impl AccountService {
             match command {
                 AccountCommand::GetStatus => self.refresh(),
                 AccountCommand::StartChatgptLogin => self.start_browser_login(),
-                AccountCommand::StartDeviceCodeLogin => self.start_device_code_login(),
                 AccountCommand::CancelLogin => self.cancel_account_login(),
                 AccountCommand::Logout => self.logout_account(),
-                AccountCommand::OpenDeviceVerification => self.open_device_verification(),
             }
         } else {
             retryable_account_error()

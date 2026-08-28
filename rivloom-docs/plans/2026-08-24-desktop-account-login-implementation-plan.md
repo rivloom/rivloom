@@ -1,5 +1,7 @@
 # Rivloom Desktop Account Login Implementation Plan
 
+> 2026-08-28 update: the device-code product path in this historical plan is superseded by the [browser-only login plan](2026-08-28-desktop-browser-only-login-plan.md).
+
 Plan status: A1.1 through A1.2a-2a2b merged and verified; A1.2a-2a3 implementation and verification
 are complete.
 

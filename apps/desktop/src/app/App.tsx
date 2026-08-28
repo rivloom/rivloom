@@ -44,10 +44,8 @@ export function App() {
             pendingAction={account.pendingAction}
             onRefresh={account.refresh}
             onStartChatgptLogin={account.beginChatgptLogin}
-            onStartDeviceCodeLogin={account.beginDeviceCodeLogin}
             onCancelLogin={account.cancelLogin}
             onLogout={account.logout}
-            onOpenDeviceVerification={account.openVerification}
           />
         </div>
       </div>

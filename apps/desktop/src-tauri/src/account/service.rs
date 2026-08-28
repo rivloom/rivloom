@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 
 use serde_json::json;
+#[cfg(test)]
 use tauri::Url;
 
 use crate::account::login::LoginStartResponse;
@@ -26,7 +27,7 @@ pub(crate) use self::status_observer::AccountStatusObserver;
 use self::status_observer::NoopAccountStatusObserver;
 
 const ACCOUNT_UNAVAILABLE_MESSAGE: &str = "账号状态暂时不可用。";
-const BROWSER_OPEN_MESSAGE: &str = "无法打开 ChatGPT 登录页面，请尝试设备码登录。";
+const BROWSER_OPEN_MESSAGE: &str = "无法打开 ChatGPT 登录页面，请重试。";
 const LOGIN_UNAVAILABLE_MESSAGE: &str = "ChatGPT 登录暂时不可用，请重试。";
 const UNSUPPORTED_ACCOUNT_MESSAGE: &str = "当前核心服务配置不支持 ChatGPT 账号登录。";
 
@@ -58,17 +59,6 @@ struct AccountServiceState {
 #[derive(Clone)]
 struct LoginAttempt {
     login_id: String,
-    kind: LoginAttemptKind,
-}
-
-#[derive(Clone)]
-enum LoginAttemptKind {
-    Browser,
-    CleanupOnly,
-    DeviceCode {
-        verification_url: Url,
-        user_code: String,
-    },
 }
 
 #[cfg(test)]
@@ -275,10 +265,7 @@ impl AccountService {
                 return self.cancel_started_attempt(
                     &connection,
                     connection_revision,
-                    LoginAttempt {
-                        login_id,
-                        kind: LoginAttemptKind::CleanupOnly,
-                    },
+                    LoginAttempt { login_id },
                     login_unavailable_error(),
                 );
             }
@@ -294,10 +281,7 @@ impl AccountService {
             self.discard_login_start(connection_revision);
             return self.set_status_for_connection(connection_revision, login_unavailable_error());
         }
-        let attempt = LoginAttempt {
-            login_id,
-            kind: LoginAttemptKind::Browser,
-        };
+        let attempt = LoginAttempt { login_id };
         let Some(auth_url) = parse_official_auth_url(&auth_url) else {
             self.discard_login_start(connection_revision);
             return self.cancel_started_attempt(
@@ -438,7 +422,6 @@ impl AccountService {
 
 mod account_actions;
 mod commands;
-mod device_code;
 mod login_completion;
 mod read;
 mod status_observer;
@@ -474,10 +457,6 @@ fn unsupported_account_error() -> AccountStatus {
 #[cfg(test)]
 #[path = "service_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "service/device_code_tests.rs"]
-mod device_code_tests;
 
 #[cfg(test)]
 #[path = "service/account_actions_tests.rs"]

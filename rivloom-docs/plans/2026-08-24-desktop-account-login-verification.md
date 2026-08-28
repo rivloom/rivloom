@@ -1,5 +1,7 @@
 # Rivloom Desktop Account Login Verification
 
+> 2026-08-28 update: device-code verification in this historical record is superseded by the [browser-only login decision](2026-08-28-desktop-browser-only-login-design.md).
+
 - Verification date: 2026-08-27
 - Branch: `codex/desktop-account-verification-a12c`
 - Base: `3b0ac72d2b` (`main`, merged PR #19)

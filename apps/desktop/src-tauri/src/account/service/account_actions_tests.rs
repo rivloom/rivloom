@@ -23,11 +23,11 @@ use crate::app_server::ConnectionError;
 #[test]
 fn explicit_cancel_cleans_the_attempt_and_rereads_backend_truth() {
     let (service, connection) = harness(vec![
-        device_login_response("cancel-me"),
+        browser_login_response("cancel-me", "https://auth.openai.com/oauth"),
         cancel_response(),
         signed_out_response(),
     ]);
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
 
     assert_eq!(service.cancel_account_login(), AccountStatus::SignedOut);
     assert_eq!(
@@ -35,7 +35,7 @@ fn explicit_cancel_cleans_the_attempt_and_rereads_backend_truth() {
         (
             AccountStatus::SignedOut,
             vec![
-                device_start_request(),
+                browser_start_request(),
                 cancel_request("cancel-me"),
                 account_read_request(),
             ]
@@ -46,19 +46,19 @@ fn explicit_cancel_cleans_the_attempt_and_rereads_backend_truth() {
 #[test]
 fn failed_cancel_keeps_a_cleanup_handle_for_a_later_retry() {
     let (service, connection) = harness(vec![
-        device_login_response("retry-cancel"),
+        browser_login_response("retry-cancel", "https://auth.openai.com/oauth"),
         Err(ConnectionError::Timeout),
         cancel_response(),
         signed_out_response(),
     ]);
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
 
     assert_eq!(service.cancel_account_login(), login_unavailable_error());
     assert_eq!(service.cancel_account_login(), AccountStatus::SignedOut);
     assert_eq!(
         connection.requests(),
         vec![
-            device_start_request(),
+            browser_start_request(),
             cancel_request("retry-cancel"),
             cancel_request("retry-cancel"),
             account_read_request(),
@@ -105,11 +105,11 @@ fn logout_failures_preserve_the_signed_in_state() {
 #[test]
 fn logout_after_canceling_a_pending_login_never_retains_temporary_values() {
     let (service, connection) = harness(vec![
-        device_login_response("cancel-before-logout"),
+        browser_login_response("cancel-before-logout", "https://auth.openai.com/oauth"),
         cancel_response(),
         Err(ConnectionError::Timeout),
     ]);
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
 
     assert_eq!(
         (service.logout_account(), service.status()),
@@ -118,7 +118,7 @@ fn logout_after_canceling_a_pending_login_never_retains_temporary_values() {
     assert_eq!(
         connection.requests(),
         vec![
-            device_start_request(),
+            browser_start_request(),
             cancel_request("cancel-before-logout"),
             request_without_params("account/logout"),
         ]
@@ -201,15 +201,15 @@ fn confirmed_cancel_invalidates_an_older_account_read() {
     let (service, _, request_receiver) = controlled_browser_service();
     let login = {
         let service = service.clone();
-        spawn_status_task(move || service.start_device_code_login())
+        spawn_status_task(move || service.start_browser_login())
     };
-    next_request(&request_receiver, "device login should start").respond(
-        device_start_request(),
-        device_login_response("cancel-with-stale-read"),
+    next_request(&request_receiver, "browser login should start").respond(
+        browser_start_request(),
+        browser_login_response("cancel-with-stale-read", "https://auth.openai.com/oauth"),
     );
     assert_eq!(
-        login.wait("device login should finish"),
-        device_pending_status()
+        login.wait("browser login should finish"),
+        AccountStatus::BrowserPending
     );
 
     let stale_read = {
@@ -245,11 +245,11 @@ fn confirmed_cancel_invalidates_an_older_account_read() {
 #[test]
 fn successful_cancel_with_failed_reread_clears_temporary_values() {
     let (service, _connection) = harness(vec![
-        device_login_response("clear-on-reread-failure"),
+        browser_login_response("clear-on-reread-failure", "https://auth.openai.com/oauth"),
         cancel_response(),
         Err(ConnectionError::Timeout),
     ]);
-    assert_eq!(service.start_device_code_login(), device_pending_status());
+    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
 
     assert_eq!(
         (service.cancel_account_login(), service.status()),
@@ -290,24 +290,8 @@ fn account_read_request() -> RecordedRequest {
     request("account/read", json!({ "refreshToken": false }))
 }
 
-pub(super) fn device_start_request() -> RecordedRequest {
-    request(
-        "account/login/start",
-        json!({ "type": "chatgptDeviceCode" }),
-    )
-}
-
 pub(super) fn cancel_request(login_id: &str) -> RecordedRequest {
     request("account/login/cancel", json!({ "loginId": login_id }))
-}
-
-pub(super) fn device_login_response(login_id: &str) -> Result<Value, ConnectionError> {
-    Ok(json!({
-        "type": "chatgptDeviceCode",
-        "loginId": login_id,
-        "verificationUrl": "https://auth.openai.com/codex/device",
-        "userCode": "ABCD-1234",
-    }))
 }
 
 pub(super) fn cancel_response() -> Result<Value, ConnectionError> {
@@ -322,13 +306,6 @@ fn signed_in_status() -> AccountStatus {
     AccountStatus::SignedIn {
         email: None,
         plan_type: "plus".to_string(),
-    }
-}
-
-fn device_pending_status() -> AccountStatus {
-    AccountStatus::DevicePending {
-        verification_url: "https://auth.openai.com/codex/device".to_string(),
-        user_code: "ABCD-1234".to_string(),
     }
 }
 

@@ -13,20 +13,12 @@ export function startChatgptLogin(): Promise<AccountStatus> {
   return invoke<AccountStatus>("start_chatgpt_login");
 }
 
-export function startDeviceCodeLogin(): Promise<AccountStatus> {
-  return invoke<AccountStatus>("start_device_code_login");
-}
-
 export function cancelAccountLogin(): Promise<AccountStatus> {
   return invoke<AccountStatus>("cancel_account_login");
 }
 
 export function logoutAccount(): Promise<AccountStatus> {
   return invoke<AccountStatus>("logout_account");
-}
-
-export function openDeviceVerification(): Promise<AccountStatus> {
-  return invoke<AccountStatus>("open_device_verification");
 }
 
 export function onAccountStatusChanged(

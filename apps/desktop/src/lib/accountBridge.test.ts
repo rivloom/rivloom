@@ -20,9 +20,7 @@ import {
   getAccountStatus,
   logoutAccount,
   onAccountStatusChanged,
-  openDeviceVerification,
   startChatgptLogin,
-  startDeviceCodeLogin,
 } from "./accountBridge";
 
 const signedOutStatus: AccountStatus = { state: "signedOut" };
@@ -36,10 +34,8 @@ describe("accountBridge", () => {
   it.each([
     ["get_account_status", getAccountStatus],
     ["start_chatgpt_login", startChatgptLogin],
-    ["start_device_code_login", startDeviceCodeLogin],
     ["cancel_account_login", cancelAccountLogin],
     ["logout_account", logoutAccount],
-    ["open_device_verification", openDeviceVerification],
   ])("invokes only the fixed %s command", async (command, call) => {
     tauriMocks.invoke.mockResolvedValue(signedOutStatus);
 

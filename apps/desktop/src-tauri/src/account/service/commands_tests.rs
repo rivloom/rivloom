@@ -7,8 +7,6 @@ use super::AccountCommand;
 use super::AccountService;
 use super::account_actions_tests::cancel_request;
 use super::account_actions_tests::cancel_response;
-use super::account_actions_tests::device_login_response;
-use super::account_actions_tests::device_start_request;
 use super::account_actions_tests::signed_out_response;
 use super::retryable_account_error;
 use super::tests::FakeConnection;
@@ -29,8 +27,6 @@ fn fixed_commands_drive_repeated_login_cancel_and_logout_requests() {
         cancel_response(),
         signed_out_response(),
         signed_out_response(),
-        device_login_response("device-login"),
-        cancel_response(),
         Ok(json!({})),
         signed_out_response(),
         Ok(json!({})),
@@ -46,8 +42,6 @@ fn fixed_commands_drive_repeated_login_cancel_and_logout_requests() {
         AccountCommand::StartChatgptLogin,
         AccountCommand::CancelLogin,
         AccountCommand::CancelLogin,
-        AccountCommand::StartDeviceCodeLogin,
-        AccountCommand::OpenDeviceVerification,
         AccountCommand::Logout,
         AccountCommand::Logout,
     ] {
@@ -64,8 +58,6 @@ fn fixed_commands_drive_repeated_login_cancel_and_logout_requests() {
             cancel_request("browser-login-2"),
             account_read_request(),
             account_read_request(),
-            device_start_request(),
-            cancel_request("device-login"),
             request_without_params("account/logout"),
             account_read_request(),
             request_without_params("account/logout"),
@@ -77,7 +69,6 @@ fn fixed_commands_drive_repeated_login_cancel_and_logout_requests() {
         vec![
             "https://auth.openai.com/oauth".to_string(),
             "https://auth.openai.com/oauth".to_string(),
-            "https://auth.openai.com/codex/device".to_string(),
         ]
     );
 }
@@ -90,10 +81,8 @@ fn every_fixed_command_returns_the_same_safe_error_when_disconnected() {
         [
             AccountCommand::GetStatus,
             AccountCommand::StartChatgptLogin,
-            AccountCommand::StartDeviceCodeLogin,
             AccountCommand::CancelLogin,
             AccountCommand::Logout,
-            AccountCommand::OpenDeviceVerification,
         ]
         .map(|command| service.execute_command(command)),
         std::array::from_fn(|_| retryable_account_error())
