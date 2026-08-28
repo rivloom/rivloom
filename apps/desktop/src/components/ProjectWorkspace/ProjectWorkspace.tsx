@@ -19,9 +19,12 @@ export function ProjectWorkspace({
   onBack,
 }: ProjectWorkspaceProps) {
   const threads = useProjectThreads(project.id, runtimeConnected);
-  const [selectedThread, setSelectedThread] = useState<ProjectThread | null>(
-    null,
-  );
+  const [selection, setSelection] = useState<{
+    projectId: string;
+    thread: ProjectThread;
+  } | null>(null);
+  const selectedThread =
+    selection?.projectId === project.id ? selection.thread : null;
   const starting = threads.threadAction?.type === "start";
   const readingThreadId =
     threads.threadAction?.type === "read"
@@ -30,12 +33,12 @@ export function ProjectWorkspace({
 
   const handleStart = async () => {
     const thread = await threads.startThread();
-    if (thread) setSelectedThread(thread);
+    if (thread) setSelection({ projectId: project.id, thread });
   };
 
   const handleSelect = async (thread: ProjectThread) => {
     const read = await threads.readThread(thread.id);
-    if (read) setSelectedThread(read);
+    if (read) setSelection({ projectId: project.id, thread: read });
   };
 
   return (

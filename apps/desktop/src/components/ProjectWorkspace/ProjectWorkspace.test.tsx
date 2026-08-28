@@ -189,4 +189,55 @@ describe("ProjectWorkspace", () => {
       screen.queryByText(/thread\/resume|turn\/start|project\//),
     ).not.toBeInTheDocument();
   });
+
+  it("does not carry a selected thread into another project", async () => {
+    const user = userEvent.setup();
+    const read = {
+      ...thread,
+      name: "项目 A 的会话",
+      preview: "只属于项目 A 的摘要。",
+    };
+    const threads = threadHook({
+      readThread: vi.fn().mockResolvedValue(read),
+      state: { state: "ready", threads: [thread], nextCursor: null },
+    });
+    hookMocks.useProjectThreads.mockReturnValue(threads);
+    const { rerender } = render(
+      <ProjectWorkspace project={project} runtimeConnected onBack={vi.fn()} />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "查看会话 检查本地项目会话，状态可继续",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(read.name)).toBeInTheDocument(),
+    );
+
+    const nextProject = {
+      ...project,
+      id: "project-b",
+      name: "Project B",
+      path: "D:\\workspaces\\project-b",
+    };
+    hookMocks.useProjectThreads.mockClear();
+    hookMocks.useProjectThreads.mockReturnValue(threadHook());
+    rerender(
+      <ProjectWorkspace
+        project={nextProject}
+        runtimeConnected
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: nextProject.name }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(read.name)).not.toBeInTheDocument();
+    expect(screen.queryByText(read.preview)).not.toBeInTheDocument();
+    expect(hookMocks.useProjectThreads.mock.calls).toEqual([
+      [nextProject.id, true],
+    ]);
+  });
 });
