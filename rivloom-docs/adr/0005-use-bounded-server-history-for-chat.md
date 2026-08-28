@@ -43,6 +43,10 @@ thread。该协议变更是 ADR-0004“默认不修改 `codex-rs`”的有证据
 事件，在 Rust 中完成历史合并、delta 批处理、turn/item reducer、重连对账和服务端请求
 拒绝。React 只接收有界、脱敏、固定 union DTO。
 
+额度适配只投影稳定完整响应的顶层兼容视图和 `codex`/缺省 ID 的稀疏通知，不读取多
+bucket 或 reset-credit 明细。只有同账号完整读取可确认 `available`；已满窗口自己的重置
+时间到达最多把旧状态降为 `unknown`，也不能解除 spend-control 或 credits 耗尽。
+
 实时通知不新增上游协议。桌面在 4 MiB decoder 之后借用读取原始 `params`，只复制通过
 字段和总量上限的归一化内容；完成事件也不能把被丢弃的工具参数、输出或超长文本重新写回
 状态。单条实时 JSONL 若超过 4 MiB，按断线处理并通过有界历史对账，不扩大 decoder。

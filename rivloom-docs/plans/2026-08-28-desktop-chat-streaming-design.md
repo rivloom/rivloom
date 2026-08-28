@@ -207,9 +207,10 @@ Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已�
 ## 11. 错误、额度、持久化和日志
 
 - `error` 通知中 `willRetry: true` 只显示暂时重试，不结束 turn；终态仍看 `turn/completed`；
-- 额度来自账号服务对稳定 `account/rateLimits/read` 和 `account/rateLimits/updated` 的归一化快照；只保留窗口百分比、重置时间和明确的耗尽状态，不保留 bucket 名、credits 明细或任意 JSON；
-- 打开会话时可从命令/后台线程刷新额度，通知 reader 回调只归一化已收到的 payload，绝不重入同一连接等待响应；所有额度响应绑定 connection identity 和账号 revision，迟到结果丢弃；
-- 明确耗尽时禁止新发送，不影响历史浏览和中止；额度未知或刷新失败时显示警告，但仍允许用户主动发送并由 App Server 执行最终额度校验，绝不自动发送或自动重试；
+- 额度完整读取只借用投影 App Server 已选择的顶层兼容视图 `rateLimits`；不遍历或反序列化 `rateLimitsByLimitId`、reset credits、bucket 名或任意 JSON。稀疏通知只接受缺省或 `codex` 的 `limitId`，其他 bucket 忽略并等待下次完整读取；
+- 固定快照只保留主/次窗口的 0–100 展示百分比、0–253402300799 的重置秒数和 `available | exhausted | unknown`。窗口 `usedPercent < 0` 无效，`>= 100` 截为 100 并明确耗尽；月度 `remainingPercent == 0`、`spendControlReached: true` 或已知 reached type 也明确耗尽。月度 remaining percent 小于 0 或大于 100、未知 reached type、没有有效窗口均为畸形或 unknown；任一可信耗尽信号优先于同快照中其他畸形字段。越界的可选重置时间只丢弃该字段并记录畸形标志，不能把明确耗尽降级；
+- 打开会话时可从命令/后台线程刷新额度，通知 reader 回调只归一化已收到的 payload，绝不重入同一连接等待响应；额度使用独立账号 revision，不复用请求 refresh revision，所有结果绑定 connection identity 和账号 revision，迟到结果丢弃；
+- 明确耗尽时禁止新发送，不影响历史浏览和中止。稀疏更新逐字段合并或收紧状态，但不能清除明确耗尽；只有同账号的有效完整读取可以确认 `available`。若耗尽唯一来自一个已满窗口，且该窗口自己的合法重置时间已到，可把旧证据放松为 `unknown`，不能直接变为 `available`；spend control、月度额度和 reached type 耗尽都必须等待完整读取。刷新失败保留同 revision 的最后快照并标记陈旧；结构畸形通知不覆盖它，能安全投影但含未知语义的通知保留有界展示字段并将可用性收紧为 `unknown`。若没有快照则显示 unknown 警告并允许用户主动发送，由 App Server 执行最终额度校验，绝不自动发送或自动重试；
 - App Server 是 thread/turn 历史权威源，桌面只持久化草稿和小型 UI 偏好；
 - 日志不记录提示词、delta、推理、工具参数/输出、服务端请求 payload、token、完整路径或原始错误；
 - 诊断只记录连接代次、revision、事件类别、计数、截断标志和稳定错误码；
@@ -225,7 +226,7 @@ Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已�
 | 切换时旧 delta 到达 | 连接身份/revision/thread/turn/item 任一不匹配即丢弃 |
 | unsubscribe 失败 | 当前 UI 仍关闭；依赖 identity 隔离，后台记录计数，重连时对账 |
 | 活动 turn 断线 | outcomeUnknown；重连 resume + summary 对账 |
-| 额度响应迟到、畸形或暂时不可用 | identity/revision 不匹配即丢弃；当前快照变为 unknown，显示警告且不自动发送 |
+| 额度响应迟到、畸形或暂时不可用 | identity/revision 不匹配即丢弃；结构畸形或失败保留同 revision 快照，未知语义收紧为 unknown，无快照也为 unknown；显示警告且不自动发送 |
 | 草稿写入中崩溃 | 保留旧正式文件；临时文件下次启动清理 |
 | 路径来自远程执行 OS | 只当显示字符串，不用本机路径 API 解释 |
 | 工具请求越权 | 后端拒绝，item 显示 declined/failed；不交给 React |
