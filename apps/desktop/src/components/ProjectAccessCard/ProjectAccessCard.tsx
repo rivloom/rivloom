@@ -94,8 +94,7 @@ export function ProjectAccessCard({
         {state.state === "loading" ? (
           <ProjectPlaceholder mark="···" {...zhCN.project.loading} />
         ) : null}
-        {state.state === "empty" ||
-        (state.state === "error" && projects.length === 0) ? (
+        {state.state === "empty" ? (
           <ProjectPlaceholder mark="↗" {...zhCN.project.empty} />
         ) : null}
         {projects.length > 0 ? (
@@ -150,7 +149,14 @@ function ProjectRow({
       <button
         className={styles.projectButton}
         type="button"
-        aria-label={zhCN.project.actions.open(project.name)}
+        aria-label={[
+          zhCN.project.actions.open(project.name),
+          active ? zhCN.project.activeLabel : null,
+          availability,
+        ]
+          .filter(Boolean)
+          .join("，")}
+        aria-current={active ? "page" : undefined}
         onClick={() => onOpenProject(project)}
         disabled={!available || busy}
       >

@@ -103,13 +103,20 @@ describe("ProjectAccessCard", () => {
 
     await user.click(screen.getByRole("button", { name: "打开本地项目" }));
     await user.click(
-      screen.getByRole("button", { name: "打开项目 Rivloom Demo" }),
+      screen.getByRole("button", {
+        name: "打开项目 Rivloom Demo，当前项目",
+      }),
     );
 
     expect(callbacks.onOpenProject.mock.calls).toEqual([
       [availableProject],
       [availableProject],
     ]);
+    expect(
+      screen.getByRole("button", {
+        name: "打开项目 Rivloom Demo，当前项目",
+      }),
+    ).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("当前项目")).toBeInTheDocument();
     expect(screen.getByText(availableProject.path)).toBeInTheDocument();
     expect(cardSnapshot()).toMatchSnapshot("populated recent projects");
@@ -125,10 +132,14 @@ describe("ProjectAccessCard", () => {
     });
 
     expect(
-      screen.getByRole("button", { name: "打开项目 Missing Demo" }),
+      screen.getByRole("button", {
+        name: "打开项目 Missing Demo，目录已不存在",
+      }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "打开项目 Private Demo" }),
+      screen.getByRole("button", {
+        name: "打开项目 Private Demo，目录无法访问",
+      }),
     ).toBeDisabled();
     expect(screen.getByText("目录已不存在")).toBeInTheDocument();
     expect(screen.getByText("目录无法访问")).toBeInTheDocument();
@@ -146,7 +157,7 @@ describe("ProjectAccessCard", () => {
       state: {
         state: "error",
         message: "最近项目暂时不可用。",
-        projects: [availableProject],
+        projects: [],
       },
       warning: "recentProjectsNotSaved",
     });
@@ -155,6 +166,7 @@ describe("ProjectAccessCard", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "项目已打开，但最近项目未能保存。",
     );
+    expect(screen.queryByText("还没有最近项目")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重新加载" }));
     expect(callbacks.onRefresh).toHaveBeenCalledOnce();
   });
