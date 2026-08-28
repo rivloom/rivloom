@@ -147,7 +147,7 @@ impl RecentProjectStore {
     }
 }
 
-fn normalize_projects(mut projects: Vec<StoredProject>) -> Vec<StoredProject> {
+pub(super) fn normalize_projects(mut projects: Vec<StoredProject>) -> Vec<StoredProject> {
     projects.sort_by(|left, right| {
         right
             .last_opened_at
