@@ -81,7 +81,11 @@ fn successful_start_transitions_from_stopped_through_starting_to_connected() {
     let mut supervisor =
         supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
+    assert!(supervisor.active_connection().is_none());
     assert_eq!(supervisor.start(), connected_status());
+    let first = supervisor.active_connection().expect("connected handle");
+    let second = supervisor.active_connection().expect("cloned handle");
+    assert_eq!(first.connection_identity(), second.connection_identity());
     assert_eq!(
         observer.statuses(),
         vec![
@@ -119,7 +123,7 @@ fn shutdown_disconnects_pending_requests_and_terminates_the_process_once() {
         supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
 
     assert_eq!(supervisor.start(), connected_status());
-    let connection = supervisor.connection().expect("connected handle");
+    let connection = supervisor.active_connection().expect("connected handle");
     let pending_connection = connection.clone();
     let pending = thread::spawn(move || pending_connection.request("account/read", json!({})));
     wait_until(|| handle.writes().len() == 3);
@@ -221,7 +225,7 @@ fn post_initialize_response_is_delivered_to_the_waiting_request() {
     let mut supervisor = supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer);
     assert_eq!(supervisor.start(), connected_status());
 
-    let connection = supervisor.connection().expect("connected handle");
+    let connection = supervisor.active_connection().expect("connected handle");
     let request =
         thread::spawn(move || connection.request("account/read", json!({ "refreshToken": false })));
     wait_until(|| handle.writes().len() == 3);
@@ -245,7 +249,7 @@ fn retry_after_termination_uses_a_new_connection() {
         observer.clone(),
     );
     assert_eq!(supervisor.start(), connected_status());
-    let old_connection = supervisor.connection().expect("first connection");
+    let old_connection = supervisor.active_connection().expect("first connection");
 
     first_handle
         .send_event(TransportEvent::Terminated(Some(1)))
@@ -257,7 +261,11 @@ fn retry_after_termination_uses_a_new_connection() {
         Err(ConnectionError::Disconnected)
     );
 
-    let new_connection = supervisor.connection().expect("second connection");
+    let new_connection = supervisor.active_connection().expect("second connection");
+    assert_ne!(
+        old_connection.connection_identity(),
+        new_connection.connection_identity()
+    );
     let request = thread::spawn(move || new_connection.request("account/read", json!({})));
     wait_until(|| second_handle.writes().len() == 3);
     second_handle
@@ -392,14 +400,14 @@ fn assert_reader_failure(trigger: impl FnOnce(FakeProcessHandle), expected_termi
         supervisor_with(FakeLauncher::with_attempts([Ok(process)]), observer.clone());
     assert_eq!(supervisor.start(), connected_status());
 
-    let connection = supervisor.connection().expect("connected handle");
+    let connection = supervisor.active_connection().expect("connected handle");
     let pending = thread::spawn(move || connection.request("account/read", json!({})));
     wait_until(|| handle.writes().len() == 3);
     trigger(handle);
 
     assert_eq!(pending.join().unwrap(), Err(ConnectionError::Disconnected));
     wait_until(|| observer.statuses().last() == Some(&startup_error_status()));
-    assert!(supervisor.connection().is_none());
+    assert!(supervisor.active_connection().is_none());
     assert_eq!(
         control.terminate_calls.load(Ordering::SeqCst),
         expected_terminate_calls

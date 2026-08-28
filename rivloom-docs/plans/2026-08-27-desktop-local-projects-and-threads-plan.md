@@ -217,7 +217,8 @@ For fake connection requests, deep-compare exact method and params:
 
 Cover pagination cursor pass-through, field whitelist parsing, missing required fields, malformed
 timestamps, sanitized remote errors, disconnect, response `cwd` mismatch, a response over 50 items,
-a cursor over 4 KiB, oversized preview/name fields, and a 500-item accumulated-summary boundary.
+a cursor over 4 KiB, UTF-8-safe bounding of long preview/name fields, and a 500-item
+accumulated-summary boundary.
 Assert recorded method names contain no `thread/resume`, `turn/start`, or `project/` prefix.
 
 **Step 2: Verify failure**
@@ -236,8 +237,9 @@ experimental project metadata.
 
 Use named methods `list_threads`, `start_thread`, and `read_thread`. Every method receives a project
 resolved from the backend registry and a connection snapshot. Verify returned cwd equality before
-returning normalized data. Limit requests and responses to 50, reject oversized cursors and fields,
-and stop pagination after 500 accumulated summaries.
+returning normalized data. Limit requests and responses to 50, reject oversized cursors, truncate
+display-only preview/name fields on UTF-8 boundaries, and stop pagination after 500 accumulated
+summaries.
 
 **Step 5: Run project and App Server tests**
 

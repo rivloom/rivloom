@@ -7,6 +7,7 @@ use tauri::AppHandle;
 use tauri::Emitter;
 
 use crate::account::AccountService;
+use crate::app_server::ConnectionControl;
 use crate::app_server::process::AppServerSupervisor;
 use crate::app_server::process::StatusObserver;
 use crate::app_server::transport::TauriProcessLauncher;
@@ -44,6 +45,15 @@ impl AppServerState {
 
     pub(crate) fn current_status(&self) -> RuntimeStatus {
         self.status.current()
+    }
+
+    #[allow(dead_code, reason = "the A2.4 command stage consumes this accessor")]
+    pub(crate) fn active_connection(&self) -> Option<Arc<dyn ConnectionControl>> {
+        self.supervisor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .active_connection()
+            .map(|connection| Arc::new(connection) as Arc<dyn ConnectionControl>)
     }
 
     pub(crate) fn start(&self) -> RuntimeStatus {
