@@ -15,11 +15,13 @@
 | 能力 | 证据 | A3 含义 |
 | --- | --- | --- |
 | `thread/resume` | v2 稳定方法；默认恢复并返回 `thread.turns` | 能恢复和订阅，但默认历史响应无界 |
+| `thread/read { includeTurns: false }` | v2 稳定 metadata 读取；公共测试确认 `turns` 为空 | 可在 resume 前校验 thread ID/cwd，必须显式禁止 turns |
 | `thread/unsubscribe` | 稳定方法；返回 `notLoaded`、`notSubscribed` 或 `unsubscribed` | 可在切换项目、thread 和退出时释放订阅 |
 | `turn/start` | 稳定方法；响应初始 turn，并流式发送 turn/item 通知 | 可用于 A3 文本发送 |
 | `turn/interrupt` | 稳定方法；成功响应为空对象 | 只表示中止请求被接受；仍须等待 `turn/completed` |
 | turn/item 生命周期 | `turn/started`、`item/started`、item delta、`item/completed`、`turn/completed` | `item/completed` 和 `turn/completed` 分别是权威终态 |
 | 账号和额度通知 | `account/updated`、`account/rateLimits/updated` | 可由同一后端通知路由器分发，不应建立第二条 sidecar 连接 |
+| 额度快照 | 稳定 `account/rateLimits/read` + 稀疏 `account/rateLimits/updated` | Rust 归一化固定快照；reader 通知回调不得重入连接等待 read 响应 |
 
 ## 3. 实验能力和当前缺口
 

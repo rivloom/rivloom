@@ -37,13 +37,14 @@ thread。该协议变更是 ADR-0004“默认不修改 `codex-rs`”的有证据
 
 桌面后端安装一个固定 `ConnectionRouter`，作为唯一连接 observer、通知 observer 和
 服务端请求 handler。它把连接生命周期与账号通知交给 `AccountService`，把连接生命周期、
-聊天通知和反向请求交给 `ChatService`。`ChatService` 以
+聊天通知和反向请求交给 `ChatService`。额度通知先由 `AccountService` 归一化，再把固定
+快照交给 `ChatService`；reader 通知回调不得同步重入连接。`ChatService` 以
 `ConnectionIdentity + lifecycleRevision + projectId + threadId + turnId + itemId` 验证
 事件，在 Rust 中完成历史合并、delta 批处理、turn/item reducer、重连对账和服务端请求
 拒绝。React 只接收有界、脱敏、固定 union DTO。
 
-A4 前所有 turn 强制只读、断网和 `approvalPolicy: "never"`；已知反向请求由 Rust 明确
-拒绝或取消，未知请求返回受控错误，React 不获得批准入口。
+A4 前所有 turn 强制只读、断网和 `approvalPolicy: "never"`；固定基线中的全部反向请求
+都由 Rust 明确拒绝、取消或返回受控的不支持错误，React 不获得批准入口。
 
 ## 结果
 

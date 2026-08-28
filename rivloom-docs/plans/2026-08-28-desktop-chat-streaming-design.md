@@ -77,7 +77,7 @@ chatBridge + useChatSession
 virtualized React transcript + composer
 ```
 
-`ConnectionRouter` 是监督器唯一的连接、通知和服务端请求路由对象。它把连接建立/断开同时送给 `AccountService` 与 `ChatService`，按方法族分发通知，并把反向请求只送给 `ChatService` 的安全拒绝器。路由器固定安装一次；服务切换只改变各服务内部 revision，不替换 observer 或 handler，避免覆盖和安装竞态。
+`ConnectionRouter` 是监督器唯一的连接、通知和服务端请求路由对象。它把连接建立/断开同时送给 `AccountService` 与 `ChatService`，按方法族分发通知，并把反向请求只送给 `ChatService` 的安全拒绝器。`account/rateLimits/updated` 先由 `AccountService` 归一化，再把固定额度快照交给 `ChatService`；通知回调不得在 reader 线程同步发起 JSON-RPC 请求。路由器固定安装一次；服务切换只改变各服务内部 revision，不替换 observer 或 handler，避免覆盖和安装竞态。
 
 `ChatService` 是协议和安全边界。React 只得到归一化 DTO，例如 `historyReplaced`、`itemsChanged`、`turnStateChanged` 和 `usageChanged`，不接触 method 名、任意 JSON、服务端请求 ID、工具参数或完整错误。
 
@@ -102,7 +102,7 @@ virtualized React transcript + composer
 
 1. 后端接收 `projectId` 和 `threadId`，不接受前端 cwd；
 2. 增加 `lifecycleRevision`，立即使旧 revision 失效；
-3. 核对项目仍在后端 registry，并用 `thread/read` 验证 thread cwd；
+3. 核对项目仍在后端 registry，并用 `thread/read { includeTurns: false }` 验证 thread cwd；该请求只取 metadata，禁止使用完整 turns；
 4. 对旧 thread 执行有时限的 best-effort unsubscribe；这不会中止旧 turn；
 5. 在当前连接调用 `thread/resume { excludeTurns: true, cwd }`；核对返回 thread ID 和 cwd；
 6. resume 建立订阅后，请求最新 20 turns 的有界 summary 页；历史装载期间缓存匹配通知；
@@ -203,7 +203,9 @@ Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已�
 ## 11. 错误、额度、持久化和日志
 
 - `error` 通知中 `willRetry: true` 只显示暂时重试，不结束 turn；终态仍看 `turn/completed`；
-- 额度来自账号服务的归一化快照；额度不足禁止新发送，不影响历史浏览和中止；
+- 额度来自账号服务对稳定 `account/rateLimits/read` 和 `account/rateLimits/updated` 的归一化快照；只保留窗口百分比、重置时间和明确的耗尽状态，不保留 bucket 名、credits 明细或任意 JSON；
+- 打开会话时可从命令/后台线程刷新额度，通知 reader 回调只归一化已收到的 payload，绝不重入同一连接等待响应；所有额度响应绑定 connection identity 和账号 revision，迟到结果丢弃；
+- 明确耗尽时禁止新发送，不影响历史浏览和中止；额度未知或刷新失败时显示警告，但仍允许用户主动发送并由 App Server 执行最终额度校验，绝不自动发送或自动重试；
 - App Server 是 thread/turn 历史权威源，桌面只持久化草稿和小型 UI 偏好；
 - 日志不记录提示词、delta、推理、工具参数/输出、服务端请求 payload、token、完整路径或原始错误；
 - 诊断只记录连接代次、revision、事件类别、计数、截断标志和稳定错误码；
@@ -218,6 +220,7 @@ Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已�
 | 切换时旧 delta 到达 | 连接身份/revision/thread/turn/item 任一不匹配即丢弃 |
 | unsubscribe 失败 | 当前 UI 仍关闭；依赖 identity 隔离，后台记录计数，重连时对账 |
 | 活动 turn 断线 | outcomeUnknown；重连 resume + summary 对账 |
+| 额度响应迟到、畸形或暂时不可用 | identity/revision 不匹配即丢弃；当前快照变为 unknown，显示警告且不自动发送 |
 | 草稿写入中崩溃 | 保留旧正式文件；临时文件下次启动清理 |
 | 路径来自远程执行 OS | 只当显示字符串，不用本机路径 API 解释 |
 | 工具请求越权 | 后端拒绝，item 显示 declined/failed；不交给 React |
@@ -226,7 +229,7 @@ Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已�
 
 协议阶段使用 App Server 公共 JSON-RPC 集成测试，覆盖稳定能力门控、序列化字节预算、UTF-8 截断、legacy/paginated 历史、游标和运行中恢复。
 
-桌面 Rust 使用 fake connection/fake sidecar 覆盖：打开/分页/释放、旧 identity、旧 revision、迟到响应、缓存溢出、delta 合并、三种终态、interrupt、断线对账、服务端请求拒绝、草稿原子替换和日志脱敏。
+桌面 Rust 使用 fake connection/fake sidecar 覆盖：metadata-only read、打开/分页/释放、旧 identity、旧 revision、迟到响应、额度稀疏更新、缓存溢出、delta 合并、三种终态、interrupt、断线对账、服务端请求拒绝、草稿原子替换和日志脱敏。
 
 React 使用 bridge、hook、reducer 和组件测试，覆盖窗口硬上限、重复/乱序事件、发送一次性、outcomeUnknown、虚拟列表、截断提示和额度错误。所有用户可见 UI 必须有快照；最终在 Windows 做 sidecar smoke 和视觉验收，并在 CI 证明 macOS/Linux 的平台无关测试。
 
