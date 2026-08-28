@@ -1,0 +1,25 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ThreadList > keeps loaded rows visible when retrying a list failure > thread list failure 1`] = `
+[
+  "Project threads项目会话查看该项目已有的会话摘要；选择会话不会恢复聊天或发送模型请求。1 / 500会话列表暂时不可用。重新加载会话○修复登录回归进行中检查一个很长的会话摘要是否能在窄窗口中自然换行，而不会把操作按钮推出卡片边界。<time>加载更多会话",
+  "重新加载会话 | enabled",
+  "查看会话 修复登录回归 | enabled",
+  "加载更多会话 | enabled",
+]
+`;
+
+exports[`ThreadList > renders loading and empty states > empty thread list 1`] = `
+[
+  "Project threads项目会话查看该项目已有的会话摘要；选择会话不会恢复聊天或发送模型请求。0 / 500＋还没有项目会话使用“新建会话”创建第一条空会话；不会自动发送模型请求。",
+]
+`;
+
+exports[`ThreadList > supports keyboard selection, status labels, and timestamp fallback > populated thread list 1`] = `
+[
+  "Project threads项目会话查看该项目已有的会话摘要；选择会话不会恢复聊天或发送模型请求。2 / 500●修复登录回归当前会话进行中检查一个很长的会话摘要是否能在窄窗口中自然换行，而不会把操作按钮推出卡片边界。<time>○整理设置页可继续<time>加载更多会话",
+  "查看会话 修复登录回归，当前会话 | enabled | true",
+  "查看会话 整理设置页 | enabled",
+  "加载更多会话 | enabled",
+]
+`;
