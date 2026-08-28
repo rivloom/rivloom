@@ -2,6 +2,8 @@ import userEvent from "@testing-library/user-event";
 import { cleanup, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { zhCN } from "../content/zh-CN";
+
 const hookMocks = vi.hoisted(() => ({
   useAccountStatus: vi.fn(),
   useRecentProjects: vi.fn(),
@@ -27,6 +29,13 @@ const project = {
   lastOpenedAt: 1_787_827_600,
   availability: "available" as const,
 };
+const connectedRuntime = {
+  state: "connected",
+  appVersion: "0.1.0",
+  appServerUserAgent: "codex-app-server/test",
+  platform: "windows",
+  codexHome: "C:\\rivloom-data",
+} as const;
 
 function account(status: object) {
   return {
@@ -88,13 +97,7 @@ describe("App", () => {
     hookMocks.useRuntimeStatus.mockReturnValue({
       retry: vi.fn(),
       retrying: false,
-      status: {
-        state: "connected",
-        appVersion: "0.1.0",
-        appServerUserAgent: "codex-app-server/test",
-        platform: "windows",
-        codexHome: "C:\\rivloom-data",
-      },
+      status: connectedRuntime,
     });
     render(<App />);
 
@@ -114,33 +117,75 @@ describe("App", () => {
       screen.getByRole("heading", { name: "本地项目" }),
     ).toBeInTheDocument();
     expect(screen.getByText("本地项目与会话")).toBeInTheDocument();
+    Object.values(zhCN.projectOverview).forEach((copy) => {
+      expect(screen.getByText(copy)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(zhCN.overview.title)).not.toBeInTheDocument();
   });
 
-  it("marks the project chosen from the recent list", async () => {
-    const user = userEvent.setup();
+  it("keeps projects gated if the runtime drops before account state resets", () => {
     hookMocks.useRuntimeStatus.mockReturnValue({
       retry: vi.fn(),
       retrying: false,
-      status: {
-        state: "connected",
-        appVersion: "0.1.0",
-        appServerUserAgent: "codex-app-server/test",
-        platform: "windows",
-        codexHome: "C:\\rivloom-data",
-      },
+      status: { state: "stopped" },
     });
     hookMocks.useAccountStatus.mockReturnValue(
       account({ state: "signedIn", email: null, planType: "plus" }),
     );
-    hookMocks.useRecentProjects.mockReturnValue({
-      ...projects(),
-      state: { state: "ready", projects: [project] },
-    });
+
     render(<App />);
 
-    await user.click(
-      screen.getByRole("button", { name: "打开项目 Project A" }),
+    expect(hookMocks.useRecentProjects).toHaveBeenLastCalledWith(false);
+    expect(
+      screen.queryByRole("heading", { name: "本地项目" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("核心服务连接后可登录")).toBeInTheDocument();
+    expect(screen.getByText(zhCN.navigation.stageTitle)).toBeInTheDocument();
+  });
+
+  it("forwards project actions and marks a selected directory", async () => {
+    const user = userEvent.setup();
+    hookMocks.useRuntimeStatus.mockReturnValue({
+      retry: vi.fn(),
+      retrying: false,
+      status: connectedRuntime,
+    });
+    hookMocks.useAccountStatus.mockReturnValue(
+      account({ state: "signedIn", email: null, planType: "plus" }),
     );
+    const projectActions = projects();
+    projectActions.select
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ project, warning: null });
+    hookMocks.useRecentProjects.mockReturnValue({
+      ...projectActions,
+      state: { state: "ready", projects: [project] },
+    });
+    const { rerender } = render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "打开本地项目" }));
+    expect(projectActions.select).toHaveBeenCalledOnce();
+    expect(screen.queryByText("当前项目")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "打开本地项目" }));
+    expect(projectActions.select).toHaveBeenCalledTimes(2);
     expect(screen.getByText("当前项目")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "从最近项目移除 Project A" }),
+    );
+    expect(projectActions.remove).toHaveBeenCalledWith(project.id);
+
+    hookMocks.useRecentProjects.mockReturnValue({
+      ...projectActions,
+      state: {
+        state: "error",
+        message: "最近项目暂时不可用。",
+        projects: [project],
+      },
+    });
+    rerender(<App />);
+    await user.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(projectActions.refresh).toHaveBeenCalledOnce();
   });
 });
