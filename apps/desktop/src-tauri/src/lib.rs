@@ -1,5 +1,10 @@
 mod account;
 mod app_server;
+#[allow(
+    dead_code,
+    reason = "A2.1 defines project contracts and storage before A2.2 wires commands"
+)]
+mod project;
 pub mod runtime_status;
 
 use account::AccountCommand;
