@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, Tauri 2, serde/serde_json, dunce, tauri-plugin-dialog, React 19, TypeScript 5.9, Vitest and Testing Library.
 
-**Status:** Draft; implement only after the design and proposed ADR are reviewed.
+**Status:** Completed; the design and ADR were accepted in PR #22, and stages A2.1–A2.7 were implemented and merged through PR #35 (`f85e075b8a0ac38694d458ba3015e6d1bbaf0c9a`).
 
 ---
 
