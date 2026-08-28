@@ -1,3 +1,4 @@
+pub(crate) mod commands;
 mod protocol;
 mod service;
 mod state;

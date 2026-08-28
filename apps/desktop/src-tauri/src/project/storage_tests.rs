@@ -26,7 +26,7 @@ fn valid_file_ignores_unknown_fields() {
     let temp_dir = tempfile::tempdir().unwrap();
     let store = store(&temp_dir);
     fs::write(
-        store.path(),
+        &store.path,
         serde_json::to_vec_pretty(&json!({
             "version": 1,
             "unknown": "ignored",
@@ -80,10 +80,10 @@ fn invalid_json_is_quarantined_without_exposing_contents() {
     let temp_dir = tempfile::tempdir().unwrap();
     let store = store(&temp_dir);
     let private_contents = "private project contents";
-    fs::write(store.path(), private_contents).unwrap();
+    fs::write(&store.path, private_contents).unwrap();
 
     assert_eq!(store.load().unwrap(), Vec::<StoredProject>::new());
-    assert!(!store.path().exists());
+    assert!(!store.path.exists());
     let quarantined = fs::read_dir(temp_dir.path())
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -108,14 +108,14 @@ fn unknown_version_is_rejected_and_never_overwritten() {
         "entries": [{"futureSchema": true}],
     }))
     .unwrap();
-    fs::write(store.path(), &future_contents).unwrap();
+    fs::write(&store.path, &future_contents).unwrap();
 
     assert_eq!(store.load(), Err(StorageError::UnsupportedVersion));
     assert_eq!(
         store.save(&[project("project-1", 1)]),
         Err(StorageError::UnsupportedVersion)
     );
-    assert_eq!(fs::read(store.path()).unwrap(), future_contents);
+    assert_eq!(fs::read(&store.path).unwrap(), future_contents);
 }
 
 #[test]
@@ -127,14 +127,14 @@ fn oversized_file_is_rejected_without_being_moved_or_overwritten() {
         "x".repeat(1024 * 1024)
     )
     .into_bytes();
-    fs::write(store.path(), &oversized_contents).unwrap();
+    fs::write(&store.path, &oversized_contents).unwrap();
 
     assert_eq!(store.load(), Err(StorageError::Read));
     assert_eq!(
         store.save(&[project("project-1", 1)]),
         Err(StorageError::Read)
     );
-    assert_eq!(fs::read(store.path()).unwrap(), oversized_contents);
+    assert_eq!(fs::read(&store.path).unwrap(), oversized_contents);
 }
 
 #[test]
@@ -154,16 +154,14 @@ fn replacement_failure_preserves_old_file_and_cleans_up_temporary_file() {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_store = store(&temp_dir);
     working_store.save(&[project("project-1", 1)]).unwrap();
-    let old_contents = fs::read(working_store.path()).unwrap();
-    let failing_store = RecentProjectStore::with_replacer(
-        working_store.path().to_path_buf(),
-        Arc::new(FailingReplacer),
-    );
+    let old_contents = fs::read(&working_store.path).unwrap();
+    let failing_store =
+        RecentProjectStore::with_replacer(working_store.path.clone(), Arc::new(FailingReplacer));
 
     let error = failing_store.save(&[project("project-2", 2)]).unwrap_err();
 
     assert_eq!(error, StorageError::Write);
-    assert_eq!(fs::read(working_store.path()).unwrap(), old_contents);
+    assert_eq!(fs::read(&working_store.path).unwrap(), old_contents);
     assert_eq!(temporary_files(&temp_dir), Vec::<String>::new());
 }
 
