@@ -2473,9 +2473,11 @@ dependencies = [
 name = "rivloom-desktop"
 version = "0.1.0-alpha.0"
 dependencies = [
+ "dunce",
  "pretty_assertions",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-shell",
