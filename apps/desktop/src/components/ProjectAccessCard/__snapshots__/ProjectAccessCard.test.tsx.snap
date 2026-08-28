@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ProjectAccessCard > disables unavailable projects but keeps remove accessible > unavailable recent projects 1`] = `
+[
+  "Local workspace本地项目从系统目录选择器登记项目，或继续最近打开的工作目录。+打开本地项目最近项目最多保留 20 个已登记目录2 / 20—Missing Demo目录已不存在C:\\workspaces\\a-very-long-folder-name\\rivloom-demo最近打开 <time>移除—Private Demo目录无法访问C:\\workspaces\\a-very-long-folder-name\\rivloom-demo最近打开 <time>移除",
+  "+打开本地项目 | enabled",
+  "打开项目 Missing Demo | disabled",
+  "从最近项目移除 Missing Demo | enabled",
+  "打开项目 Private Demo | disabled",
+  "从最近项目移除 Private Demo | enabled",
+]
+`;
+
+exports[`ProjectAccessCard > keeps dialog cancellation quiet in the empty state > empty recent projects 1`] = `
+[
+  "Local workspace本地项目从系统目录选择器登记项目，或继续最近打开的工作目录。+打开本地项目最近项目最多保留 20 个已登记目录↗还没有最近项目使用上方按钮选择一个现有目录开始。",
+  "+打开本地项目 | enabled",
+]
+`;
+
+exports[`ProjectAccessCard > opens selected and recent available projects > populated recent projects 1`] = `
+[
+  "Local workspace本地项目从系统目录选择器登记项目，或继续最近打开的工作目录。+打开本地项目最近项目最多保留 20 个已登记目录1 / 20↗Rivloom Demo当前项目C:\\workspaces\\a-very-long-folder-name\\rivloom-demo最近打开 <time>移除",
+  "+打开本地项目 | enabled",
+  "打开项目 Rivloom Demo | enabled",
+  "从最近项目移除 Rivloom Demo | enabled",
+]
+`;
