@@ -384,8 +384,8 @@ fn save_failure_returns_the_project_with_a_nonfatal_warning() {
         service
             .lookup_project(&selected.project.id)
             .unwrap()
-            .project(),
-        &selected.project
+            .project,
+        selected.project
     );
 }
 

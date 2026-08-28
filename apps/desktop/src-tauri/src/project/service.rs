@@ -26,18 +26,9 @@ pub(crate) enum PersistenceWarning {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ResolvedProject {
     project: LocalProject,
-    path: PathBuf,
 }
 
 impl ResolvedProject {
-    pub(crate) fn project(&self) -> &LocalProject {
-        &self.project
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub(crate) fn cwd(&self) -> &str {
         &self.project.path
     }
@@ -124,7 +115,6 @@ impl ProjectService {
         }
         Ok(ResolvedProject {
             project: local_project(stored, ProjectAvailability::Available),
-            path,
         })
     }
 

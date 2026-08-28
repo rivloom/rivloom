@@ -135,7 +135,6 @@ impl AppServerSupervisor {
         self.transition(RuntimeStatus::Stopped)
     }
 
-    #[allow(dead_code, reason = "the A2.4 command stage consumes this accessor")]
     pub(super) fn active_connection(&self) -> Option<AppServerConnection> {
         self.lifecycle
             .lock()

@@ -7,6 +7,9 @@ repository = "https://github.com/rivloom/rivloom"
 edition = "2024"
 rust-version = "1.85"
 
+[features]
+test-tauri-commands = []
+
 [lib]
 name = "rivloom_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -30,4 +33,5 @@ windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
+tauri = { version = "2", features = ["test"] }
 tempfile = "3"

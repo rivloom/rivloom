@@ -55,10 +55,6 @@ impl RecentProjectStore {
         Self { path, replacer }
     }
 
-    pub(crate) fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub(crate) fn load(&self) -> Result<Vec<StoredProject>, StorageError> {
         let Some(document) = self.read_document()? else {
             return Ok(Vec::new());

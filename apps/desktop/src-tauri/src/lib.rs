@@ -1,9 +1,5 @@
 mod account;
 mod app_server;
-#[allow(
-    dead_code,
-    reason = "A2.4a registers project state before A2.4b exposes fixed commands"
-)]
 mod project;
 pub mod runtime_status;
 
@@ -12,9 +8,11 @@ use account::AccountState;
 use account::AccountStatus;
 use app_server::state::AppServerState;
 use project::ProjectState;
+use project::commands::{ProjectConnectionState, ProjectDialogState};
 use runtime_status::RuntimeStatus;
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri::Runtime;
 use tauri::State;
 
 const COMMAND_ERROR_MESSAGE: &str = "核心服务暂时无法连接。";
@@ -26,7 +24,7 @@ fn get_runtime_status(state: State<'_, AppServerState>) -> RuntimeStatus {
 }
 
 #[tauri::command]
-async fn retry_app_server(app_handle: AppHandle) -> RuntimeStatus {
+async fn retry_app_server<R: Runtime>(app_handle: AppHandle<R>) -> RuntimeStatus {
     tauri::async_runtime::spawn_blocking(move || {
         app_handle
             .try_state::<AppServerState>()
@@ -38,26 +36,29 @@ async fn retry_app_server(app_handle: AppHandle) -> RuntimeStatus {
 }
 
 #[tauri::command]
-async fn get_account_status(app_handle: AppHandle) -> AccountStatus {
+async fn get_account_status<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
     run_account_command(app_handle, AccountCommand::GetStatus).await
 }
 
 #[tauri::command]
-async fn start_chatgpt_login(app_handle: AppHandle) -> AccountStatus {
+async fn start_chatgpt_login<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
     run_account_command(app_handle, AccountCommand::StartChatgptLogin).await
 }
 
 #[tauri::command]
-async fn cancel_account_login(app_handle: AppHandle) -> AccountStatus {
+async fn cancel_account_login<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
     run_account_command(app_handle, AccountCommand::CancelLogin).await
 }
 
 #[tauri::command]
-async fn logout_account(app_handle: AppHandle) -> AccountStatus {
+async fn logout_account<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
     run_account_command(app_handle, AccountCommand::Logout).await
 }
 
-async fn run_account_command(app_handle: AppHandle, command: AccountCommand) -> AccountStatus {
+async fn run_account_command<R: Runtime>(
+    app_handle: AppHandle<R>,
+    command: AccountCommand,
+) -> AccountStatus {
     tauri::async_runtime::spawn_blocking(move || {
         app_handle
             .try_state::<AccountState>()
@@ -82,6 +83,23 @@ fn account_command_error_status() -> AccountStatus {
     }
 }
 
+fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        get_runtime_status,
+        retry_app_server,
+        get_account_status,
+        start_chatgpt_login,
+        cancel_account_login,
+        logout_account,
+        project::commands::list_recent_projects,
+        project::commands::select_project,
+        project::commands::remove_recent_project,
+        project::commands::list_project_threads,
+        project::commands::start_project_thread,
+        project::commands::read_project_thread,
+    ]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -96,14 +114,7 @@ pub fn run() {
     let app = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![
-            get_runtime_status,
-            retry_app_server,
-            get_account_status,
-            start_chatgpt_login,
-            cancel_account_login,
-            logout_account,
-        ])
+        .invoke_handler(invoke_handler())
         .setup(|app| {
             let app_data = app.path().app_local_data_dir()?;
             let codex_home = app_data.join("codex-home");
@@ -115,6 +126,18 @@ pub fn run() {
             let state = AppServerState::new(app.handle().clone(), codex_home, account_service);
             if !app.manage(state) {
                 return Err(std::io::Error::other("App Server state was already managed").into());
+            }
+            let project_dialog_state = ProjectDialogState::new(app.handle().clone());
+            if !app.manage(project_dialog_state) {
+                return Err(
+                    std::io::Error::other("Project dialog state was already managed").into(),
+                );
+            }
+            let project_connection_state = ProjectConnectionState::new(app.handle().clone());
+            if !app.manage(project_connection_state) {
+                return Err(
+                    std::io::Error::other("Project connection state was already managed").into(),
+                );
             }
             let project_state =
                 ProjectState::new(app_data.join("settings").join("recent-projects-v1.json"));

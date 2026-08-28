@@ -47,7 +47,6 @@ impl AppServerState {
         self.status.current()
     }
 
-    #[allow(dead_code, reason = "the A2.4 command stage consumes this accessor")]
     pub(crate) fn active_connection(&self) -> Option<Arc<dyn ConnectionControl>> {
         self.supervisor
             .lock()
