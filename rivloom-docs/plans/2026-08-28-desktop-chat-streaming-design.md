@@ -192,11 +192,12 @@ Rust 最多约 30 Hz 合并 delta 后向 Tauri 发送批次；React reducer 一�
 
 ## 10. A4 前的安全边界
 
-每次 thread start/resume 和 turn start 都强制：
+每次 thread start/resume 和 turn start 都强制使用各自稳定 wire 形状：
 
-- `approvalPolicy: "never"`；
-- `sandboxPolicy: { type: "readOnly", networkAccess: false }` 或协议等价配置；
-- 不声明 dynamic tools、MCP UI、attestation、apps、插件或实验能力。
+- `thread/start` 与 `thread/resume` 发送 `approvalPolicy: "never"`、`sandbox: "read-only"`；它们不接受 `sandboxPolicy`，粗粒度 read-only 在 Core 中等价于磁盘只读且网络关闭；
+- `turn/start` 发送 `approvalPolicy: "never"`、`sandboxPolicy: { type: "readOnly", networkAccess: false }` 和后端解析出的项目 cwd；它不使用 thread 请求的 `sandbox` 字段；
+- thread start/resume 响应中的有效 `approvalPolicy` 和 `sandbox` 必须仍为 never/read-only/network-off，否则会话进入不安全配置错误且禁止发送；
+- 不声明 `permissions`、dynamic tools、MCP UI、attestation、apps、插件、environments、collaboration mode 或实验能力。
 
 Rivloom 使用 ADR-0002 的隔离 `CODEX_HOME`，A3 不写入 MCP 配置。已知反向请求在 Rust 后端按方法返回明确 decline/cancel；`request_user_input` 和未知方法可返回受控错误。React 永远没有“批准”命令。`fileChange` 只显示“本阶段已阻止”，不展示 diff；命令只显示已脱敏命令摘要和最终状态。任何可能有外部副作用且无法证明被 read-only/network-off 覆盖的工具类型都在 A3 失败关闭。
 

@@ -109,6 +109,9 @@
 
 **Files:**
 
+- Modify: `apps/desktop/src-tauri/src/project/protocol.rs`
+- Modify: `apps/desktop/src-tauri/src/project/protocol_tests.rs`
+- Modify: `apps/desktop/src-tauri/src/project/thread_service_tests.rs`
 - Modify: `apps/desktop/src-tauri/src/chat/mod.rs`
 - Create: `apps/desktop/src-tauri/src/chat/types.rs`
 - Create: `apps/desktop/src-tauri/src/chat/types_tests.rs`
@@ -119,9 +122,10 @@
 
 1. Write parser tests for valid 0/1/20 pages, truncation flags, malformed IDs/cursors, overlong fields, wrong cwd and page/result caps.
 2. Define fixed DTO unions for user, assistant, reasoning, command, generic tool and blocked file-change items. Do not store raw JSON.
-3. Serialize only metadata-only resume and 20-turn summary requests with 3 MiB `maxBytes`; define the turn/start request builder here so every later caller is forced to use read-only sandboxing, network off and `approvalPolicy: "never"`.
-4. Parse with per-field and aggregate limits before allocating React DTOs.
-5. Run desktop Rust tests. Commit as `feat(desktop): add bounded chat protocol`.
+3. Test exact stable safety payloads: thread start/resume use `approvalPolicy: "never"` plus `sandbox: "read-only"`; turn start uses `approvalPolicy: "never"` plus `sandboxPolicy: { type: "readOnly", networkAccess: false }`. Assert `permissions`, dynamic tools, environments, collaboration and every experimental field are absent.
+4. Update the existing A2 thread-start builder, serialize only metadata-only resume and 20-turn summary requests with 3 MiB `maxBytes`, and define the turn/start builder here. All three builders receive backend-resolved cwd only.
+5. Validate effective thread start/resume responses remain never/read-only/network-off before a chat can become ready. Parse every response with per-field and aggregate limits before allocating React DTOs.
+6. Run desktop Rust tests. Commit as `feat(desktop): add bounded chat protocol`.
 
 ## Stage A3.3 — Thread lifecycle and race isolation
 
@@ -265,7 +269,7 @@
 
 1. From `codex-rs`, run `just fmt`, scoped `just fix -p` for changed crates, protocol tests and the app-server public JSON-RPC suite required by A3. Ask before a complete workspace `just test`.
 2. From `apps/desktop`, run `just fmt`, `just check`, `just test-rust` and `just check-rust`.
-3. Run fake-sidecar scenarios for metadata-only reads, 4 MiB boundaries, rate-limit refresh/update races, late resume, old connection/project/thread/turn/item events, delta loss, reconnect and every server-request rejection. Assert zero real model endpoints.
+3. Run fake-sidecar scenarios for exact start/resume/turn safety payloads, unsafe effective-policy rejection, metadata-only reads, 4 MiB boundaries, rate-limit refresh/update races, late resume, old connection/project/thread/turn/item events, delta loss, reconnect and every server-request rejection. Assert zero real model endpoints.
 4. Perform deterministic Windows smoke and visual checks; record CI coverage for macOS/Linux.
 5. Audit every PR against 800/500 lines, raw JSON exposure, log payloads, permissions, experimental capability, rollout reads and JSONL limit changes.
 6. Record actual commits, test counts, snapshots, known limitations and A4 as the only next product stage. Commit as `docs: record A3 chat verification`.

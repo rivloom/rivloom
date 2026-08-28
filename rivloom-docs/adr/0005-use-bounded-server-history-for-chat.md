@@ -43,8 +43,10 @@ thread。该协议变更是 ADR-0004“默认不修改 `codex-rs`”的有证据
 事件，在 Rust 中完成历史合并、delta 批处理、turn/item reducer、重连对账和服务端请求
 拒绝。React 只接收有界、脱敏、固定 union DTO。
 
-A4 前所有 turn 强制只读、断网和 `approvalPolicy: "never"`；固定基线中的全部反向请求
-都由 Rust 明确拒绝、取消或返回受控的不支持错误，React 不获得批准入口。
+A4 前 thread start/resume 使用稳定 `sandbox: "read-only"`，turn start 使用稳定
+`sandboxPolicy: { type: "readOnly", networkAccess: false }`，三者都固定
+`approvalPolicy: "never"` 并验证响应中的有效策略；不启用实验 `permissions`。固定基线
+中的全部反向请求都由 Rust 明确拒绝、取消或返回受控的不支持错误，React 不获得批准入口。
 
 ## 结果
 

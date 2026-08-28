@@ -23,6 +23,12 @@
 | 账号和额度通知 | `account/updated`、`account/rateLimits/updated` | 可由同一后端通知路由器分发，不应建立第二条 sidecar 连接 |
 | 额度快照 | 稳定 `account/rateLimits/read` + 稀疏 `account/rateLimits/updated` | Rust 归一化固定快照；reader 通知回调不得重入连接等待 read 响应 |
 
+安全字段并非三个方法共用同一 wire 类型：`thread/start` 和 `thread/resume` 接受稳定
+`sandbox: "read-only"`，Core 将其投影为磁盘只读、网络关闭；`turn/start` 接受稳定
+`sandboxPolicy: { type: "readOnly", networkAccess: false }`。三者都接受稳定
+`approvalPolicy: "never"`。A3 必须对不同方法构造精确 payload，不能互换 `sandbox` 与
+`sandboxPolicy`，也不应借助实验 `permissions` 达到同一目的。
+
 ## 3. 实验能力和当前缺口
 
 下列能力都要求初始化时声明 `capabilities.experimentalApi: true`：
