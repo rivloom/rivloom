@@ -71,15 +71,14 @@
 - Create: `apps/desktop/src-tauri/src/chat/service.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/mod.rs`
 - Modify: `apps/desktop/src-tauri/src/app_server/state.rs`
-- Modify: `apps/desktop/src-tauri/src/account/service/login_completion.rs`
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
 
 **Steps:**
 
-1. Write tests for account-only (including rate-limit), chat-only and unknown notifications plus connected/disconnected delivery. Assert the source connection identity is preserved and payloads are not logged.
+1. Write router tests with recording sinks for existing account login/update, chat-routed and unknown notifications plus connected/disconnected delivery. Assert notification and connected identities are preserved and payloads are not logged. Disconnect remains identity-free only after the supervisor's current-generation guard. Rate-limit normalization and forwarding remain entirely in A3.1b.
 2. Add the smallest inert `ChatService` shell so the router has a real, fixed destination before chat session state exists; it must not emit events or retain raw payloads yet.
-3. Implement one `ConnectionRouter` holding `Arc<AccountService>` and `Arc<ChatService>` sinks; install the same router once as both supervisor connection observer and notification observer.
-4. Preserve account login completion behavior and keep stale-connection rejection inside each service, where the active identity and revision are authoritative.
+3. Implement one `ConnectionRouter` with a small documented observer-sink boundary backed in production by `Arc<AccountService>` and `Arc<ChatService>`; delegate through the existing account observer implementations and install the same router once as both supervisor connection observer and notification observer.
+4. Preserve the existing account observer code unchanged and keep stale-connection rejection inside each service, where the active identity and revision are authoritative.
 5. Run desktop Rust tests and check the diff. Commit as `refactor(desktop): route app-server events`.
 
 ## Stage A3.1b — Bounded account quota adapter
