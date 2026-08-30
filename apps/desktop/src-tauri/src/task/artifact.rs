@@ -30,6 +30,16 @@ pub(crate) struct PatchArtifact {
     pub(crate) patch: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PatchArtifactMetadata {
+    pub(crate) baseline_commit: String,
+    pub(crate) state: PatchArtifactState,
+    pub(crate) limit_bytes: u64,
+    pub(crate) byte_count: Option<u64>,
+    pub(crate) sha256: Option<String>,
+}
+
 impl PatchArtifact {
     pub(crate) fn collect(worktree: &TaskWorktree) -> Result<Self, ArtifactError> {
         worktree
@@ -103,33 +113,58 @@ impl PatchArtifact {
     }
 
     pub(super) fn is_valid(&self) -> bool {
+        let metadata = PatchArtifactMetadata {
+            baseline_commit: self.baseline_commit.clone(),
+            state: self.state,
+            limit_bytes: self.limit_bytes,
+            byte_count: self.byte_count,
+            sha256: self.sha256.clone(),
+        };
+        if !metadata.is_valid() {
+            return false;
+        }
+        match self.state {
+            PatchArtifactState::Empty => self.patch.as_deref() == Some(""),
+            PatchArtifactState::Complete => self.patch.as_ref().is_some_and(|patch| {
+                !patch.is_empty()
+                    && self.byte_count == Some(patch.len() as u64)
+                    && self.sha256.as_deref() == Some(&sha256(patch.as_bytes()))
+            }),
+            PatchArtifactState::TooLarge | PatchArtifactState::UnsupportedEncoding => {
+                self.patch.is_none()
+            }
+        }
+    }
+
+    pub(super) fn metadata(&self) -> Option<PatchArtifactMetadata> {
+        self.is_valid().then(|| PatchArtifactMetadata {
+            baseline_commit: self.baseline_commit.clone(),
+            state: self.state,
+            limit_bytes: self.limit_bytes,
+            byte_count: self.byte_count,
+            sha256: self.sha256.clone(),
+        })
+    }
+}
+
+impl PatchArtifactMetadata {
+    pub(super) fn is_valid(&self) -> bool {
         if self.limit_bytes != MAX_PATCH_BYTES || !valid_hex(&self.baseline_commit, &[40, 64]) {
             return false;
         }
         match self.state {
             PatchArtifactState::Empty => {
-                self.byte_count == Some(0)
-                    && self.sha256.as_deref() == Some(&sha256([]))
-                    && self.patch.as_deref() == Some("")
+                self.byte_count == Some(0) && self.sha256.as_deref() == Some(&sha256([]))
             }
-            PatchArtifactState::Complete => self.patch.as_ref().is_some_and(|patch| {
-                !patch.is_empty()
-                    && patch.len() as u64 <= self.limit_bytes
-                    && self.byte_count == Some(patch.len() as u64)
-                    && self.sha256.as_deref() == Some(&sha256(patch.as_bytes()))
-            }),
-            PatchArtifactState::TooLarge => {
-                self.byte_count.is_none() && self.sha256.is_none() && self.patch.is_none()
-            }
-            PatchArtifactState::UnsupportedEncoding => {
+            PatchArtifactState::Complete | PatchArtifactState::UnsupportedEncoding => {
                 self.byte_count
                     .is_some_and(|bytes| bytes > 0 && bytes <= self.limit_bytes)
                     && self
                         .sha256
                         .as_deref()
                         .is_some_and(|hash| valid_hex(hash, &[64]))
-                    && self.patch.is_none()
             }
+            PatchArtifactState::TooLarge => self.byte_count.is_none() && self.sha256.is_none(),
         }
     }
 }

@@ -7,6 +7,7 @@ use sha2::Sha256;
 use super::*;
 use crate::task::artifact::MAX_PATCH_BYTES;
 use crate::task::artifact::PatchArtifact;
+use crate::task::artifact::PatchArtifactMetadata;
 use crate::task::artifact::PatchArtifactState;
 
 #[test]
@@ -58,8 +59,8 @@ fn success_receipt_is_a_complete_verifiable_object() {
                     },
                 ],
             },
-            patch: complete_patch(),
-            content_sha256: "542028a5e531419891a0793992c7d9c171e8ded6722bda6b8cc3303a415d559d"
+            patch: complete_patch_metadata(),
+            content_sha256: "2015f14f062f90b1687f41e779c47f36f7a9f1b800f38b652145773bc5893d5e"
                 .to_string(),
         }
     );
@@ -103,8 +104,8 @@ fn failed_receipt_keeps_failure_and_test_exit_result() {
                     exit_code: 101,
                 }],
             },
-            patch: empty_patch(),
-            content_sha256: "e2c18f733a43984636f856390417119a4e1bceda7733e5ed0900925671268627"
+            patch: empty_patch_metadata(),
+            content_sha256: "1173fe8987780e915315f1d0a86e5d396ea773c2096515dd8d52f7c78600d2b7"
                 .to_string(),
         }
     );
@@ -138,8 +139,8 @@ fn cancelled_receipt_never_invents_a_test_report() {
             summary: Some("Stopped by the local user".to_string()),
             error: None,
             tests: TestReport::NotReported,
-            patch: empty_patch(),
-            content_sha256: "6b95064279586acf8e9e44888598ce7b9c5f02cd905a142dec70dae928285bd6"
+            patch: empty_patch_metadata(),
+            content_sha256: "11a9828dc341f664ddd1f2fd00376197bafa440c5e0d4b72cd30e55378a204b0"
                 .to_string(),
         }
     );
@@ -173,8 +174,8 @@ fn unknown_outcome_is_explicit_and_never_becomes_success() {
             summary: None,
             error: Some("Runtime disconnected before a terminal event".to_string()),
             tests: TestReport::NotReported,
-            patch: empty_patch(),
-            content_sha256: "6e76a4748e0979db15a43aa1b3fde5580b73a442b30927f6a09ea3d4912919e4"
+            patch: empty_patch_metadata(),
+            content_sha256: "f44df6e405b0d7d3464b0bd4da720c310624a67a935d91d07dc87fff10e70632"
                 .to_string(),
         }
     );
@@ -182,6 +183,7 @@ fn unknown_outcome_is_explicit_and_never_becomes_success() {
     let serialized = serde_json::to_string(&receipt).unwrap();
     assert!(serialized.contains("\"schemaVersion\":1"));
     assert!(serialized.contains("\"tests\":{\"state\":\"notReported\"}"));
+    assert!(!serialized.contains("diff --git"));
     assert!(!serialized.contains("runtime-token-must-not-leak"));
     assert!(!serialized.contains("C:\\\\Users\\\\alice\\\\project"));
     assert!(!serialized.contains("/home/alice/project"));
@@ -228,7 +230,6 @@ fn wire_contract_exposes_no_runtime_secret_or_absolute_path_fields() {
             "baselineCommit",
             "byteCount",
             "limitBytes",
-            "patch",
             "sha256",
             "state",
         ])
@@ -412,6 +413,14 @@ fn empty_patch() -> PatchArtifact {
         sha256: Some(sha256([])),
         patch: Some(String::new()),
     }
+}
+
+fn complete_patch_metadata() -> PatchArtifactMetadata {
+    complete_patch().metadata().unwrap()
+}
+
+fn empty_patch_metadata() -> PatchArtifactMetadata {
+    empty_patch().metadata().unwrap()
 }
 
 fn sha256(bytes: impl AsRef<[u8]>) -> String {

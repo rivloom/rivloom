@@ -4,6 +4,7 @@ use sha2::Sha256;
 use thiserror::Error;
 
 use super::artifact::PatchArtifact;
+use super::artifact::PatchArtifactMetadata;
 
 pub(crate) const RUN_RECEIPT_SCHEMA_VERSION: u32 = 1;
 pub(crate) const MAX_RECEIPT_ID_BYTES: usize = 128;
@@ -72,12 +73,13 @@ pub(crate) struct RunReceipt {
     pub(crate) summary: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) tests: TestReport,
-    pub(crate) patch: PatchArtifact,
+    pub(crate) patch: PatchArtifactMetadata,
     pub(crate) content_sha256: String,
 }
 
 impl RunReceipt {
     pub(crate) fn new(input: RunReceiptInput) -> Result<Self, ReceiptError> {
+        let patch = input.patch.metadata().ok_or(ReceiptError::InvalidPatch)?;
         let mut receipt = Self {
             schema_version: RUN_RECEIPT_SCHEMA_VERSION,
             task_id: input.task_id,
@@ -91,7 +93,7 @@ impl RunReceipt {
             summary: input.summary,
             error: input.error,
             tests: input.tests,
-            patch: input.patch,
+            patch,
             content_sha256: String::new(),
         };
         receipt.validate_fields()?;
@@ -180,7 +182,7 @@ struct ReceiptPayload<'a> {
     summary: Option<&'a str>,
     error: Option<&'a str>,
     tests: &'a TestReport,
-    patch: &'a PatchArtifact,
+    patch: &'a PatchArtifactMetadata,
 }
 
 fn valid_id(value: &str) -> bool {
