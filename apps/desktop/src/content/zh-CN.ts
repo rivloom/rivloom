@@ -104,19 +104,11 @@ export const zhCN = {
     pathLabel: "项目目录",
     actions: {
       back: "返回项目首页",
-      start: "新建会话",
-      starting: "正在新建…",
     },
     disconnected: {
       title: "核心服务连接中断",
       description:
         "已保存任务仍可查看和起草；连接恢复前不能启动新的 Codex Run。",
-    },
-    selection: {
-      eyebrow: "Selected thread",
-      placeholderTitle: "聊天与恢复将在 A3 接入",
-      placeholderDescription:
-        "A2 只读取这条会话的归一化摘要，不载入历史消息，也不会发送模型请求。",
     },
   },
   task: {
