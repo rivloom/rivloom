@@ -194,6 +194,23 @@ fn event_count_single_event_and_total_bytes_are_hard_bounded() {
 }
 
 #[test]
+fn disconnect_deactivates_every_pending_run_without_inventing_a_terminal_event() {
+    let router = EventRouter::default();
+    let connection = ConnectionIdentity::new();
+    let first = router
+        .prepare_run(connection.clone(), "run-1", "thread-1")
+        .unwrap();
+    let second = router.prepare_run(connection, "run-2", "thread-2").unwrap();
+
+    crate::app_server::process::ConnectionObserver::on_disconnected(&router);
+
+    assert!(!first.is_active());
+    assert!(!second.is_active());
+    assert_eq!(drain(&first), vec![]);
+    assert_eq!(drain(&second), vec![]);
+}
+
+#[test]
 fn connection_forwards_approval_requests_before_its_safe_fallback_response() {
     let writes = Arc::new(Mutex::new(Vec::new()));
     let writer_writes = writes.clone();

@@ -107,6 +107,35 @@ fn runtime_failure_never_becomes_success() {
 }
 
 #[test]
+fn user_stop_interrupts_only_the_matching_active_run_and_records_cancellation() {
+    let fixture = Fixture::new("goal", Ok(turn_response()));
+    let LocalCodexRunStart::Active(mut active) = fixture.runner.start(fixture.request()).unwrap()
+    else {
+        panic!("run must become active");
+    };
+
+    assert_eq!(active.task_id(), "task-1");
+    assert_eq!(active.run_id(), "run-1");
+    active.interrupt().unwrap();
+    let completion = poll_until_finished(&mut active);
+
+    assert_eq!(completion.run.status, RunStatus::Cancelled);
+    assert_eq!(
+        completion.run.receipt.unwrap().outcome,
+        RunReceiptOutcome::Cancelled
+    );
+    assert_eq!(
+        fixture
+            .connection
+            .requests()
+            .into_iter()
+            .map(|(method, _)| method)
+            .collect::<Vec<_>>(),
+        vec!["thread/start", "turn/start", "turn/interrupt"]
+    );
+}
+
+#[test]
 fn invalid_prompt_and_unknown_turn_start_are_bounded_before_or_after_the_runtime_boundary() {
     let oversized = Fixture::new(&"x".repeat(1_000), Ok(turn_response()));
     assert_eq!(
@@ -325,6 +354,10 @@ impl ConnectionControl for RecordingConnection {
                     );
                 }
                 result
+            }
+            "turn/interrupt" => {
+                self.terminal("interrupted");
+                Ok(json!({}))
             }
             _ => Err(ConnectionError::Remote { code: -32601 }),
         }

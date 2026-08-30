@@ -81,6 +81,15 @@ impl TaskService {
         Ok(record)
     }
 
+    pub(super) fn list_tasks(&self) -> Result<Vec<TaskRecord>, TaskServiceError> {
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        cache
+            .as_ref()
+            .map(|tasks| tasks.iter().map(|task| task.record.clone()).collect())
+            .ok_or(TaskServiceError::State)
+    }
+
     pub(super) fn get_task(&self, task_id: &str) -> Result<TaskRecord, TaskServiceError> {
         let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
         self.ensure_loaded(&mut cache)?;
@@ -89,6 +98,42 @@ impl TaskService {
             .and_then(|tasks| tasks.iter().find(|task| task.record.id == task_id))
             .map(|task| task.record.clone())
             .ok_or(TaskServiceError::TaskNotFound)
+    }
+
+    pub(super) fn accept_task(&self, task_id: &str) -> Result<TaskRecord, TaskServiceError> {
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
+        let task_index = tasks
+            .iter()
+            .position(|task| task.record.id == task_id)
+            .ok_or(TaskServiceError::TaskNotFound)?;
+        let mut next = tasks.clone();
+        match next[task_index].record.status {
+            TaskStatus::Draft => {
+                next[task_index]
+                    .record
+                    .transition(TaskStatus::Offered, TransitionDetails::default())?;
+                next[task_index]
+                    .record
+                    .transition(TaskStatus::Accepted, TransitionDetails::default())?;
+            }
+            TaskStatus::Offered => next[task_index]
+                .record
+                .transition(TaskStatus::Accepted, TransitionDetails::default())?,
+            TaskStatus::Accepted
+            | TaskStatus::Running
+            | TaskStatus::AwaitingReview
+            | TaskStatus::Approved
+            | TaskStatus::Rejected
+            | TaskStatus::Cancelled
+            | TaskStatus::Failed
+            | TaskStatus::OutcomeUnknown => return Ok(next[task_index].record.clone()),
+        }
+        self.store.save(&next)?;
+        let accepted = next[task_index].record.clone();
+        *cache = Some(next);
+        Ok(accepted)
     }
 
     pub(super) fn register_run(

@@ -13,6 +13,7 @@ use thiserror::Error;
 
 use super::ConnectionIdentity;
 use super::NotificationObserver;
+use super::process::ConnectionObserver;
 
 const MAX_CORRELATION_ID_BYTES: usize = 128;
 const MAX_ACTIVE_ROUTES: usize = 32;
@@ -181,6 +182,20 @@ impl EventRouter {
             routes.remove(index);
         }
     }
+
+    fn deactivate_all(&self) {
+        let routes = self
+            .routes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain(..)
+            .collect::<Vec<_>>();
+        for route in routes {
+            if let Some(queue) = route.queue.upgrade() {
+                queue.active.store(false, Ordering::Release);
+            }
+        }
+    }
 }
 
 impl NotificationObserver for EventRouter {
@@ -201,6 +216,14 @@ impl NotificationObserver for EventRouter {
         params: &Value,
     ) {
         self.route(connection_identity, method, params);
+    }
+}
+
+impl ConnectionObserver for EventRouter {
+    fn on_connected(&self, _connection: Arc<dyn super::ConnectionControl>) {}
+
+    fn on_disconnected(&self) {
+        self.deactivate_all();
     }
 }
 

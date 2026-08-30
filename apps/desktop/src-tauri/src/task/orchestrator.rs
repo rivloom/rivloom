@@ -79,6 +79,14 @@ pub(crate) struct LocalCodexRunService {
 }
 
 impl LocalCodexRunService {
+    pub(crate) fn new(
+        tasks: Arc<TaskService>,
+        worktrees: TaskWorktreeManager,
+        events: Arc<EventRouter>,
+    ) -> Self {
+        Self::with_clock(tasks, worktrees, events, Arc::new(SystemTaskRunClock))
+    }
+
     fn with_clock(
         tasks: Arc<TaskService>,
         worktrees: TaskWorktreeManager,
@@ -160,6 +168,8 @@ impl LocalCodexRunService {
         Ok(LocalCodexRunStart::Active(Box::new(ActiveLocalCodexRun {
             tasks: self.tasks.clone(),
             clock: self.clock.clone(),
+            runtime: self.runtime.clone(),
+            connection: request.connection,
             metadata,
             worktree,
             active,
@@ -181,6 +191,8 @@ impl LocalCodexRunService {
 pub(crate) struct ActiveLocalCodexRun {
     tasks: Arc<TaskService>,
     clock: Arc<dyn TaskRunClock>,
+    runtime: Arc<CodexRuntime>,
+    connection: Arc<dyn ConnectionControl>,
     metadata: RunMetadata,
     worktree: TaskWorktree,
     active: ActiveCodexRun,
@@ -189,6 +201,20 @@ pub(crate) struct ActiveLocalCodexRun {
 }
 
 impl ActiveLocalCodexRun {
+    pub(crate) fn task_id(&self) -> &str {
+        &self.metadata.task_id
+    }
+
+    pub(crate) fn run_id(&self) -> &str {
+        &self.metadata.run_id
+    }
+
+    pub(crate) fn interrupt(&self) -> Result<(), TaskRunError> {
+        self.runtime
+            .interrupt_run(&self.active, self.connection.clone())
+            .map_err(Into::into)
+    }
+
     pub(crate) fn poll(&mut self) -> Result<LocalCodexRunProgress, TaskRunError> {
         if let Some(completion) = &self.completion {
             return Ok(LocalCodexRunProgress::Finished(completion.clone()));

@@ -78,6 +78,30 @@ fn repeated_run_idempotency_key_returns_the_original_across_restarts() {
 }
 
 #[test]
+fn local_task_listing_and_acceptance_are_persisted_and_idempotent() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("tasks-v1.json");
+    let service = TaskService::new(TaskStore::new(path.clone()));
+    let draft = service
+        .create_task(create_request("task-1", "create-1"))
+        .unwrap();
+    let mut accepted = draft.clone();
+    accepted
+        .transition(TaskStatus::Offered, TransitionDetails::default())
+        .unwrap();
+    accepted
+        .transition(TaskStatus::Accepted, TransitionDetails::default())
+        .unwrap();
+
+    assert_eq!(service.list_tasks().unwrap(), vec![draft]);
+    assert_eq!(service.accept_task("task-1").unwrap(), accepted);
+    assert_eq!(service.accept_task("task-1").unwrap(), accepted);
+
+    let restarted = TaskService::new(TaskStore::new(path));
+    assert_eq!(restarted.list_tasks().unwrap(), vec![accepted]);
+}
+
+#[test]
 fn unknown_tasks_are_rejected_without_creating_a_run() {
     let temp_dir = tempfile::tempdir().unwrap();
     let service = TaskService::new(TaskStore::new(temp_dir.path().join("tasks-v1.json")));
