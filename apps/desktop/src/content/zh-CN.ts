@@ -118,6 +118,46 @@ export const zhCN = {
         "A2 只读取这条会话的归一化摘要，不载入历史消息，也不会发送模型请求。",
     },
   },
+  task: {
+    composer: {
+      label: "定义本地任务",
+      eyebrow: "Local task / bounded input",
+      title: "把目标交给本机 Codex",
+      description:
+        "Rivloom 会为这次执行创建隔离 worktree，并只把下面的有界任务正文交给 Runtime。",
+      boundary: (current: number, maximum: number) =>
+        `${current.toLocaleString()} / ${maximum.toLocaleString()}-byte run guard`,
+      goal: {
+        label: "任务目标",
+        placeholder: "清楚描述要完成的结果，例如：修复登录恢复并补充回归测试。",
+        hint: "描述可验收的结果，不要粘贴 Token、密钥或无界日志。",
+        bytes: (current: number, maximum: number) =>
+          `${current.toLocaleString()} / ${maximum.toLocaleString()} bytes`,
+      },
+      constraints: {
+        label: "执行约束（每行一条）",
+        placeholder: "保持现有存储兼容\n不修改 codex-rs",
+        hint: "最多 32 条；每条 1 KiB，合计 8 KiB。空行会被忽略。",
+        count: (current: number, maximum: number) => `${current} / ${maximum}`,
+      },
+      sharing: {
+        title: "只发送目标与约束",
+        description: "项目绝对路径、Runtime 凭据与完整日志不会进入任务正文。",
+        runtimeRequired: "连接 Codex Runtime 后即可启动",
+      },
+      actions: {
+        start: "启动本地任务",
+        starting: "正在启动…",
+      },
+      errors: {
+        goalTooLarge: "任务目标不能超过 4 KiB。",
+        tooManyConstraints: "执行约束最多 32 条。",
+        constraintTooLarge: "每条执行约束不能超过 1 KiB。",
+        constraintsTooLarge: "执行约束合计不能超过 8 KiB。",
+        promptTooLarge: "最终任务正文超过 1,000-byte 安全上限。",
+      },
+    },
+  },
   identity: {
     eyebrow: "01 / Local identity",
     title: "Rivloom 身份",
