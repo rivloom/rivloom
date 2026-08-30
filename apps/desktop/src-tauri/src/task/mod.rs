@@ -1,4 +1,6 @@
+mod service;
 mod state_machine;
+mod storage;
 mod types;
 
 #[cfg(test)]

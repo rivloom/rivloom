@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use thiserror::Error;
 
 use super::types::*;
@@ -32,6 +34,45 @@ impl TaskRecord {
         self.status = next;
         apply_details(&mut self.summary, &mut self.error, details);
         self.push_event(TaskEventKind::TaskStatusChanged { from, to: next });
+        Ok(())
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), StateMachineError> {
+        validate_id(&self.id, StateMachineError::InvalidTaskId)?;
+        validate_spec(&self.spec)?;
+        validate_details(&TransitionDetails {
+            summary: self.summary.clone(),
+            error: self.error.clone(),
+        })?;
+        if self.runs.len() > MAX_EVENTS {
+            return Err(StateMachineError::TooManyRuns);
+        }
+        if self.events.len() > MAX_EVENTS {
+            return Err(StateMachineError::EventLimitReached);
+        }
+        for (index, event) in self.events.iter().enumerate() {
+            if event.sequence != index as u32 + 1 {
+                return Err(StateMachineError::InvalidEventSequence);
+            }
+            match &event.kind {
+                TaskEventKind::TaskStatusChanged { .. } => {}
+                TaskEventKind::RunRegistered { run_id }
+                | TaskEventKind::RunStatusChanged { run_id, .. } => {
+                    validate_id(run_id, StateMachineError::InvalidRunId)?;
+                }
+            }
+        }
+        let mut run_ids = HashSet::new();
+        for run in &self.runs {
+            validate_id(&run.id, StateMachineError::InvalidRunId)?;
+            if !run_ids.insert(&run.id) {
+                return Err(StateMachineError::DuplicateRun);
+            }
+            validate_details(&TransitionDetails {
+                summary: run.summary.clone(),
+                error: run.error.clone(),
+            })?;
+        }
         Ok(())
     }
 
@@ -250,4 +291,8 @@ pub(crate) enum StateMachineError {
     UnknownRun,
     #[error("task event limit reached")]
     EventLimitReached,
+    #[error("task has too many runs")]
+    TooManyRuns,
+    #[error("task event sequence is invalid")]
+    InvalidEventSequence,
 }
