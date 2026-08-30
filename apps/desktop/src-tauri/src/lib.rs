@@ -8,6 +8,10 @@ use account::AccountCommand;
 use account::AccountState;
 use account::CodexRuntimeAuthStatus;
 use app_server::state::AppServerState;
+use identity::IdentityService;
+use identity::IdentityServiceError;
+use identity::IdentityStore;
+use identity::RivloomIdentity;
 use project::ProjectState;
 use project::commands::{ProjectConnectionState, ProjectDialogState};
 use runtime_status::RuntimeStatus;
@@ -18,6 +22,8 @@ use tauri::State;
 
 const COMMAND_ERROR_MESSAGE: &str = "核心服务暂时无法连接。";
 const ACCOUNT_COMMAND_ERROR_MESSAGE: &str = "账号状态暂时不可用。";
+const IDENTITY_COMMAND_ERROR_MESSAGE: &str = "Rivloom 身份暂时不可用。";
+const IDENTITY_DISPLAY_NAME_ERROR_MESSAGE: &str = "显示名称不能为空或超过 80 字节。";
 
 #[tauri::command]
 fn get_runtime_status(state: State<'_, AppServerState>) -> RuntimeStatus {
@@ -56,6 +62,23 @@ async fn logout_account<R: Runtime>(app_handle: AppHandle<R>) -> CodexRuntimeAut
     run_account_command(app_handle, AccountCommand::Logout).await
 }
 
+#[tauri::command]
+async fn get_identity<R: Runtime>(app_handle: AppHandle<R>) -> Result<RivloomIdentity, String> {
+    run_identity_command(app_handle, IdentityCommand::Get).await
+}
+
+#[tauri::command]
+async fn update_identity_display_name<R: Runtime>(
+    app_handle: AppHandle<R>,
+    display_name: String,
+) -> Result<RivloomIdentity, String> {
+    run_identity_command(
+        app_handle,
+        IdentityCommand::UpdateDisplayName { display_name },
+    )
+    .await
+}
+
 async fn run_account_command<R: Runtime>(
     app_handle: AppHandle<R>,
     command: AccountCommand,
@@ -84,6 +107,40 @@ fn account_command_error_status() -> CodexRuntimeAuthStatus {
     }
 }
 
+enum IdentityCommand {
+    Get,
+    UpdateDisplayName { display_name: String },
+}
+
+async fn run_identity_command<R: Runtime>(
+    app_handle: AppHandle<R>,
+    command: IdentityCommand,
+) -> Result<RivloomIdentity, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let service = app_handle
+            .try_state::<IdentityService>()
+            .ok_or_else(|| IDENTITY_COMMAND_ERROR_MESSAGE.to_string())?;
+        let result = match command {
+            IdentityCommand::Get => service.get(),
+            IdentityCommand::UpdateDisplayName { display_name } => {
+                service.update_display_name(&display_name)
+            }
+        };
+        result.map_err(identity_command_error_message)
+    })
+    .await
+    .unwrap_or_else(|_| Err(IDENTITY_COMMAND_ERROR_MESSAGE.to_string()))
+}
+
+fn identity_command_error_message(error: IdentityServiceError) -> String {
+    match error {
+        IdentityServiceError::InvalidDisplayName => IDENTITY_DISPLAY_NAME_ERROR_MESSAGE.to_string(),
+        IdentityServiceError::Storage
+        | IdentityServiceError::InvalidStoredIdentity
+        | IdentityServiceError::State => IDENTITY_COMMAND_ERROR_MESSAGE.to_string(),
+    }
+}
+
 fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
         get_runtime_status,
@@ -92,6 +149,8 @@ fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send
         start_chatgpt_login,
         cancel_account_login,
         logout_account,
+        get_identity,
+        update_identity_display_name,
         project::commands::list_recent_projects,
         project::commands::select_project,
         project::commands::remove_recent_project,
@@ -144,6 +203,12 @@ pub fn run() {
                 ProjectState::new(app_data.join("settings").join("recent-projects-v1.json"));
             if !app.manage(project_state) {
                 return Err(std::io::Error::other("Project state was already managed").into());
+            }
+            let identity_service = IdentityService::new(IdentityStore::new(
+                app_data.join("settings").join("identity-v1.json"),
+            ));
+            if !app.manage(identity_service) {
+                return Err(std::io::Error::other("Identity service was already managed").into());
             }
 
             let app_handle = app.handle().clone();
