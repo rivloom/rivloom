@@ -312,8 +312,7 @@ Claude Code、Hermes、Reasonix 等在进入里程碑前分别审查当时固定
 | R6 第二 Runtime 验证 | 通过许可证门禁后，用一个真实 Runtime 提取最小公共契约 |
 | R7 Skill Directory | 仅在至少两个 Runtime 的真实任务需要后评审 |
 
-详细实施顺序见
-[Runtime Host Transition Implementation Plan](2026-08-30-runtime-host-transition-plan.md)。
+详细实施顺序将在配套的 Runtime Host Transition Implementation Plan 中单独发布和审查。
 
 ## 15. 第一版验收标准
 

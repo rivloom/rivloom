@@ -8,8 +8,6 @@ directory, which is reserved for upstream Codex documentation.
 
 - [Runtime Host 与协作闭环设计](plans/2026-08-30-runtime-host-collaboration-design.md)
   is the current authoritative product and architecture design.
-- [Runtime Host Transition Implementation Plan](plans/2026-08-30-runtime-host-transition-plan.md)
-  defines the active milestones and delivery gates.
 - [2026-08-24 Rivloom Desktop 架构设计](plans/2026-08-24-rivloom-desktop-architecture-design.md)
   is retained as the historical A0–A2 baseline; its chat-first milestone order is superseded.
 

@@ -297,8 +297,8 @@ rivloom/
 ## 13. 交付里程碑
 
 > 本节是 2026-08-24 的历史计划。当前里程碑以
-> [Runtime Host Transition Implementation Plan](2026-08-30-runtime-host-transition-plan.md)
-> 为准。
+> [Runtime Host 与协作闭环设计第 14 节](2026-08-30-runtime-host-collaboration-design.md#14-里程碑-gate)
+> 为准；详细迁移计划将单独发布和审查。
 
 1. **桌面空壳**：窗口、品牌、导航、sidecar 启动和连接状态。
 2. **账号登录**：独立数据目录、OAuth、账号状态和退出登录。
