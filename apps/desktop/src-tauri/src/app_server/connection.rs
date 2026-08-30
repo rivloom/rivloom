@@ -47,6 +47,15 @@ pub(crate) trait NotificationObserver: Send + Sync {
         method: &str,
         params: &Value,
     );
+
+    fn on_server_request(
+        &self,
+        _connection_identity: &ConnectionIdentity,
+        _request_id: &Value,
+        _method: &str,
+        _params: &Value,
+    ) {
+    }
 }
 
 #[derive(Clone)]
@@ -183,7 +192,16 @@ impl AppServerConnection {
                     observer.on_notification(&self.inner.identity, &method, &params);
                 }
             }
-            InboundMessage::ServerRequest { id, .. } => {
+            InboundMessage::ServerRequest { id, method, params } => {
+                let observer = self
+                    .inner
+                    .observer
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone();
+                if let Some(observer) = observer {
+                    observer.on_server_request(&self.inner.identity, &id, &method, &params);
+                }
                 let line = json_line(&ErrorResponse {
                     id: &id,
                     error: ResponseError {
