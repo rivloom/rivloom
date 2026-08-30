@@ -3,6 +3,13 @@ use serde_json::json;
 
 use super::state_machine::StateMachineError;
 use super::types::*;
+use crate::task::artifact::MAX_PATCH_BYTES;
+use crate::task::artifact::PatchArtifact;
+use crate::task::artifact::PatchArtifactState;
+use crate::task::receipt::RunReceipt;
+use crate::task::receipt::RunReceiptInput;
+use crate::task::receipt::RunReceiptOutcome;
+use crate::task::receipt::TestReport;
 
 #[test]
 fn every_legal_task_transition_updates_the_entire_record() {
@@ -202,6 +209,42 @@ fn run_registration_is_bounded_and_rejects_duplicates() {
 }
 
 #[test]
+fn receipts_require_exact_correlation_and_terminal_outcome_and_are_idempotent() {
+    let mut task = task_with_run(RunStatus::Completed);
+    let original_receipt = receipt("task-1", "run-1", RunReceiptOutcome::Success, 90);
+
+    task.attach_receipt("run-1", original_receipt.clone())
+        .unwrap();
+    let expected = task.clone();
+    assert_eq!(task.runs[0].receipt, Some(original_receipt.clone()));
+    task.attach_receipt("run-1", original_receipt).unwrap();
+    assert_eq!(task, expected);
+
+    assert_eq!(
+        task.attach_receipt(
+            "run-1",
+            receipt("task-1", "run-1", RunReceiptOutcome::Success, 91)
+        ),
+        Err(StateMachineError::ReceiptConflict)
+    );
+    assert_eq!(
+        task.attach_receipt(
+            "run-1",
+            receipt("task-2", "run-1", RunReceiptOutcome::Success, 90)
+        ),
+        Err(StateMachineError::InvalidReceipt)
+    );
+    assert_eq!(
+        task.attach_receipt(
+            "run-1",
+            receipt("task-1", "run-1", RunReceiptOutcome::Failed, 90)
+        ),
+        Err(StateMachineError::InvalidReceipt)
+    );
+    assert_eq!(task, expected);
+}
+
+#[test]
 fn task_records_serialize_to_the_exact_frontend_contract() {
     let mut task = task_with_run(RunStatus::WaitingApproval);
     task.status = TaskStatus::Running;
@@ -227,6 +270,7 @@ fn task_records_serialize_to_the_exact_frontend_contract() {
                 "status": "waitingApproval",
                 "summary": null,
                 "error": null,
+                "receipt": null,
             }],
             "events": [{
                 "sequence": 1,
@@ -260,8 +304,46 @@ fn task_with_run(status: RunStatus) -> TaskRecord {
         status,
         summary: None,
         error: None,
+        receipt: None,
     });
     task
+}
+
+fn receipt(
+    task_id: &str,
+    run_id: &str,
+    outcome: RunReceiptOutcome,
+    finished_at: i64,
+) -> RunReceipt {
+    let error = matches!(
+        outcome,
+        RunReceiptOutcome::Failed | RunReceiptOutcome::OutcomeUnknown
+    )
+    .then(|| "run did not complete successfully".to_string());
+    RunReceipt::new(RunReceiptInput {
+        task_id: task_id.to_string(),
+        run_id: run_id.to_string(),
+        node_id: "node-1".to_string(),
+        runtime_id: "codex".to_string(),
+        runtime_version: "1.2.3".to_string(),
+        started_at: 1,
+        finished_at,
+        outcome,
+        summary: None,
+        error,
+        tests: TestReport::NotReported,
+        patch: PatchArtifact {
+            baseline_commit: "a".repeat(40),
+            state: PatchArtifactState::Empty,
+            limit_bytes: MAX_PATCH_BYTES,
+            byte_count: Some(0),
+            sha256: Some(
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
+            ),
+            patch: Some(String::new()),
+        },
+    })
+    .unwrap()
 }
 
 fn task_event() -> TaskEvent {

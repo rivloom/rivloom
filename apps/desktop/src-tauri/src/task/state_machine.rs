@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use thiserror::Error;
 
+use super::receipt::RunReceipt;
+use super::receipt::RunReceiptOutcome;
 use super::types::*;
 
 impl TaskRecord {
@@ -72,6 +74,9 @@ impl TaskRecord {
                 summary: run.summary.clone(),
                 error: run.error.clone(),
             })?;
+            if let Some(receipt) = &run.receipt {
+                validate_receipt(&self.id, run, receipt)?;
+            }
         }
         Ok(())
     }
@@ -94,6 +99,7 @@ impl TaskRecord {
             status: RunStatus::Queued,
             summary: None,
             error: None,
+            receipt: None,
         });
         self.push_event(TaskEventKind::RunRegistered { run_id });
         Ok(())
@@ -127,6 +133,27 @@ impl TaskRecord {
         Ok(())
     }
 
+    pub(crate) fn attach_receipt(
+        &mut self,
+        run_id: &str,
+        receipt: RunReceipt,
+    ) -> Result<(), StateMachineError> {
+        let run = self
+            .runs
+            .iter_mut()
+            .find(|run| run.id == run_id)
+            .ok_or(StateMachineError::UnknownRun)?;
+        validate_receipt(&self.id, run, &receipt)?;
+        match &run.receipt {
+            Some(existing) if existing == &receipt => Ok(()),
+            Some(_) => Err(StateMachineError::ReceiptConflict),
+            None => {
+                run.receipt = Some(receipt);
+                Ok(())
+            }
+        }
+    }
+
     fn ensure_event_capacity(&self) -> Result<(), StateMachineError> {
         if self.events.len() >= MAX_EVENTS {
             Err(StateMachineError::EventLimitReached)
@@ -141,6 +168,32 @@ impl TaskRecord {
             kind,
         });
     }
+}
+
+fn validate_receipt(
+    task_id: &str,
+    run: &RunRecord,
+    receipt: &RunReceipt,
+) -> Result<(), StateMachineError> {
+    let expected_outcome = match run.status {
+        RunStatus::Completed => RunReceiptOutcome::Success,
+        RunStatus::Cancelled => RunReceiptOutcome::Cancelled,
+        RunStatus::Failed => RunReceiptOutcome::Failed,
+        RunStatus::OutcomeUnknown => RunReceiptOutcome::OutcomeUnknown,
+        RunStatus::Queued | RunStatus::Running | RunStatus::WaitingApproval => {
+            return Err(StateMachineError::InvalidReceipt);
+        }
+    };
+    if receipt.task_id != task_id
+        || receipt.run_id != run.id
+        || receipt.outcome != expected_outcome
+        || receipt.summary != run.summary
+        || receipt.error != run.error
+        || receipt.verify().is_err()
+    {
+        return Err(StateMachineError::InvalidReceipt);
+    }
+    Ok(())
 }
 
 fn validate_spec(spec: &TaskSpec) -> Result<(), StateMachineError> {
@@ -289,6 +342,10 @@ pub(crate) enum StateMachineError {
     DuplicateRun,
     #[error("run does not exist")]
     UnknownRun,
+    #[error("RunReceipt does not match the terminal run")]
+    InvalidReceipt,
+    #[error("a different RunReceipt is already attached")]
+    ReceiptConflict,
     #[error("task event limit reached")]
     EventLimitReached,
     #[error("task has too many runs")]

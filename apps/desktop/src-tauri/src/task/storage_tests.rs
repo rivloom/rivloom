@@ -12,6 +12,13 @@ use super::MAX_STORED_TASKS;
 use super::StorageError;
 use super::StoredTask;
 use super::TaskStore;
+use crate::task::artifact::MAX_PATCH_BYTES;
+use crate::task::artifact::PatchArtifactMetadata;
+use crate::task::artifact::PatchArtifactState;
+use crate::task::receipt::RUN_RECEIPT_SCHEMA_VERSION;
+use crate::task::receipt::RunReceipt;
+use crate::task::receipt::RunReceiptOutcome;
+use crate::task::receipt::TestReport;
 use crate::task::types::*;
 
 #[test]
@@ -57,12 +64,81 @@ fn oversized_storage_document_is_rejected_without_writing() {
                 status: RunStatus::Completed,
                 summary: Some("s".repeat(MAX_SUMMARY_BYTES)),
                 error: None,
+                receipt: None,
             })
             .collect();
     }
 
     assert!(serde_json::to_vec(&tasks).unwrap().len() as u64 > MAX_STORAGE_BYTES);
     assert_eq!(store.save(&tasks), Err(StorageError::InvalidData));
+    assert!(!store.path.exists());
+}
+
+#[test]
+fn version_one_files_without_receipt_fields_remain_compatible() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let store = store(&temp_dir);
+    let mut task = stored_task(1);
+    task.record.status = TaskStatus::Accepted;
+    task.record.runs.push(RunRecord {
+        id: "run-1".to_string(),
+        status: RunStatus::Queued,
+        summary: None,
+        error: None,
+        receipt: None,
+    });
+    store.save(&[task]).unwrap();
+    let mut document: serde_json::Value =
+        serde_json::from_slice(&fs::read(&store.path).unwrap()).unwrap();
+    document["tasks"][0]["record"]["runs"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("receipt");
+    fs::write(&store.path, serde_json::to_vec_pretty(&document).unwrap()).unwrap();
+
+    let loaded = store.load().unwrap();
+
+    assert_eq!(loaded[0].record.runs[0].receipt, None);
+}
+
+#[test]
+fn invalid_receipt_hash_is_rejected_before_storage_write() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let store = store(&temp_dir);
+    let mut task = stored_task(1);
+    task.record.status = TaskStatus::AwaitingReview;
+    task.record.runs.push(RunRecord {
+        id: "run-1".to_string(),
+        status: RunStatus::Completed,
+        summary: None,
+        error: None,
+        receipt: Some(RunReceipt {
+            schema_version: RUN_RECEIPT_SCHEMA_VERSION,
+            task_id: "task-1".to_string(),
+            run_id: "run-1".to_string(),
+            node_id: "node-1".to_string(),
+            runtime_id: "codex".to_string(),
+            runtime_version: "1.2.3".to_string(),
+            started_at: 1,
+            finished_at: 2,
+            outcome: RunReceiptOutcome::Success,
+            summary: None,
+            error: None,
+            tests: TestReport::NotReported,
+            patch: PatchArtifactMetadata {
+                baseline_commit: "a".repeat(40),
+                state: PatchArtifactState::Empty,
+                limit_bytes: MAX_PATCH_BYTES,
+                byte_count: Some(0),
+                sha256: Some(
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
+                ),
+            },
+            content_sha256: "0".repeat(64),
+        }),
+    });
+
+    assert_eq!(store.save(&[task]), Err(StorageError::InvalidData));
     assert!(!store.path.exists());
 }
 

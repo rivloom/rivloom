@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 
+use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
@@ -10,7 +11,7 @@ use super::worktree::TaskWorktree;
 
 pub(crate) const MAX_PATCH_BYTES: u64 = 512 * 1024;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum PatchArtifactState {
     Empty,
@@ -19,7 +20,7 @@ pub(crate) enum PatchArtifactState {
     UnsupportedEncoding,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PatchArtifact {
     pub(crate) baseline_commit: String,
@@ -30,7 +31,7 @@ pub(crate) struct PatchArtifact {
     pub(crate) patch: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PatchArtifactMetadata {
     pub(crate) baseline_commit: String,

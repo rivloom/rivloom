@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
@@ -15,7 +16,7 @@ pub(crate) const MAX_TEST_EXECUTIONS: usize = 32;
 const MAX_TEST_NAME_BYTES: usize = 256;
 const MAX_TEST_NAME_TOTAL_BYTES: usize = 4 * 1024;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum RunReceiptOutcome {
     Success,
@@ -24,14 +25,14 @@ pub(crate) enum RunReceiptOutcome {
     OutcomeUnknown,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TestExecution {
     pub(crate) name: String,
     pub(crate) exit_code: i32,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(
     tag = "state",
     rename_all = "camelCase",
@@ -58,7 +59,7 @@ pub(crate) struct RunReceiptInput {
     pub(crate) patch: PatchArtifact,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RunReceipt {
     pub(crate) schema_version: u32,
