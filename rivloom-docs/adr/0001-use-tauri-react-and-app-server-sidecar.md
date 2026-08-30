@@ -16,6 +16,11 @@ Rivloom 需要为开源 Codex 构建可公开发行的桌面界面。第一版�
 `codex-app-server` 编译为与桌面版本配套的 sidecar，由 Tauri 启动并通过 stdio JSONL
 协议通信。
 
+在 2026-08-30 的 Runtime Host 架构中，该 sidecar 被明确定位为第一个外部 Agent
+Runtime，而不是 Rivloom 的源码内核。Rivloom 不依赖 `codex-core`；未来 Runtime 也通过
+独立进程边界接入。详见
+[ADR-0005](0005-use-external-agent-runtimes.md)。
+
 React 只能通过受控 Tauri IPC 使用本机能力。App Server 不对本地网络或公网开放服务
 端口。
 
@@ -56,5 +61,7 @@ React 只能通过受控 Tauri IPC 使用本机能力。App Server 不对本地�
 ## 参考资料
 
 - [Rivloom Desktop 架构设计](../plans/2026-08-24-rivloom-desktop-architecture-design.md)
+- [Runtime Host 与协作闭环设计](../plans/2026-08-30-runtime-host-collaboration-design.md)
+- [ADR-0005：采用外部 Agent Runtime](0005-use-external-agent-runtimes.md)
 - [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server)
 - [Tauri documentation](https://v2.tauri.app/)

@@ -6,9 +6,9 @@ Accepted
 
 ## 背景
 
-Rivloom 建立在 `openai/codex` 之上，需要长期吸收上游安全修复和新能力，同时维护自己
-的桌面界面、品牌、代理配置和未来协作功能。将产品功能散落在 `codex-rs` 中会显著
-增加同步冲突。
+Rivloom 仓库沿用 `openai/codex` 的上游源码和历史，需要长期吸收上游安全修复和 App
+Server 新能力，同时维护自己的桌面界面、品牌和协作控制面。将产品功能散落在
+`codex-rs` 中会显著增加同步冲突，也会让外部 Runtime 边界退化成源码耦合。
 
 仓库根目录的 `AGENTS.md` 还要求避免在现有 `docs/` 中加入普通产品文档，因此 Rivloom
 文档也需要清晰分区。
@@ -19,6 +19,9 @@ Rivloom 建立在 `openai/codex` 之上，需要长期吸收上游安全修复�
 - Rivloom 文档放在 `rivloom-docs`。
 - 新的 Rivloom Rust 能力优先放在独立 crate，而不是 `codex-core`。
 - 第一版优先使用现有 App Server v2 协议，不修改 Codex 核心。
+- `apps/desktop` 不把 `codex-rs` 当作库内核；Codex 通过独立 App Server 进程接入。
+- 第一条协作闭环完成前不进行大规模仓库拆分。之后可以单独评审把 Rivloom 产品代码与
+  完整上游源码进一步分离，但不能让仓库迁移阻塞产品验证。
 - 产品开发开始后，`main` 代表 Rivloom 产品状态。
 - 上游更新在独立分支中合并 `upstream/main`，经过构建和测试后再通过 PR 进入 `main`。
 - 不为维持线性历史而强制重写公开主分支。
@@ -59,4 +62,6 @@ Rivloom 建立在 `openai/codex` 之上，需要长期吸收上游安全修复�
 ## 参考资料
 
 - [Rivloom Desktop 架构设计](../plans/2026-08-24-rivloom-desktop-architecture-design.md)
+- [Runtime Host 与协作闭环设计](../plans/2026-08-30-runtime-host-collaboration-design.md)
+- [ADR-0005：采用外部 Agent Runtime](0005-use-external-agent-runtimes.md)
 - Repository root `AGENTS.md`

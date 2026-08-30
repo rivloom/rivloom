@@ -18,6 +18,10 @@ Rivloom 启动 App Server 时，将 `CODEX_HOME` 设置为 Rivloom 本地应用�
 React 不读取登录令牌。令牌由 App Server 管理，Tauri 只负责提供隔离目录和展示登录
 状态。
 
+该登录只代表当前 Node 的 Codex Runtime Auth，不代表 Rivloom 用户、设备或团队身份。
+Brain 永不接收此目录或其中凭证。详见
+[ADR-0006](0006-separate-rivloom-identity-from-runtime-auth.md)。
+
 ## 结果
 
 ### 正面
@@ -50,4 +54,6 @@ React 不读取登录令牌。令牌由 App Server 管理，Tauri 只负责提�
 ## 参考资料
 
 - [Rivloom Desktop 架构设计](../plans/2026-08-24-rivloom-desktop-architecture-design.md)
+- [Runtime Host 与协作闭环设计](../plans/2026-08-30-runtime-host-collaboration-design.md)
+- [ADR-0006：分离 Rivloom Identity 与 Runtime Auth](0006-separate-rivloom-identity-from-runtime-auth.md)
 - [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server)

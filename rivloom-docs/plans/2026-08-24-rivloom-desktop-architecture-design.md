@@ -1,9 +1,15 @@
 # Rivloom Desktop 架构设计
 
-- 状态：已确认
+- 状态：历史基线；A0–A2 实现仍有效，chat-first 产品顺序已被取代
 - 日期：2026-08-24
 - 首发平台：Windows
 - 产品形态：公开开源的商业桌面产品
+
+> 路线更新（2026-08-30）：当前权威设计为
+> [Runtime Host 与协作闭环设计](2026-08-30-runtime-host-collaboration-design.md)。本文保留
+> Tauri 外壳、App Server sidecar、独立 `CODEX_HOME`、本地项目、安全和上游同步等已经
+> 验证的工程决策；第 1、2、7、13、14 节中的单机 Chat 产品范围和交付顺序不再指导近期
+> 开发。近期第一目标改为两人、两 Node 的 Codex 任务委派与 Patch 审查闭环。
 
 ## 1. 目标
 
@@ -290,6 +296,10 @@ rivloom/
 
 ## 13. 交付里程碑
 
+> 本节是 2026-08-24 的历史计划。当前里程碑以
+> [Runtime Host 与协作闭环设计第 14 节](2026-08-30-runtime-host-collaboration-design.md#14-里程碑-gate)
+> 为准；详细迁移计划将单独发布和审查。
+
 1. **桌面空壳**：窗口、品牌、导航、sidecar 启动和连接状态。
 2. **账号登录**：独立数据目录、OAuth、账号状态和退出登录。
 3. **本地项目**：目录选择、最近项目、创建和恢复对话。
@@ -298,6 +308,9 @@ rivloom/
 6. **公开发行**：Windows 安装包、签名、合规清单、SBOM 和 GitHub 发布流程。
 
 ## 14. 第一版验收标准
+
+> 本节记录原单机客户端验收。当前第一版验收已改为两人、两 Node 的协作闭环，详见
+> [当前权威设计第 15 节](2026-08-30-runtime-host-collaboration-design.md#15-第一版验收标准)。
 
 在一台没有安装 Rust、Node.js 和 Codex CLI 的受支持 Windows 电脑上，用户可以：
 
@@ -314,6 +327,9 @@ rivloom/
 - [ADR-0001：采用 Tauri、React 与 App Server sidecar](../adr/0001-use-tauri-react-and-app-server-sidecar.md)
 - [ADR-0002：隔离 Rivloom 的 Codex 数据目录](../adr/0002-isolate-rivloom-codex-home.md)
 - [ADR-0003：分离 Rivloom 产品代码并以合并方式同步上游](../adr/0003-separate-rivloom-code-from-upstream-codex.md)
+- [ADR-0004：以稳定 cwd 协议表示本地项目](../adr/0004-use-stable-cwd-for-local-projects.md)
+- [ADR-0005：采用外部 Agent Runtime](../adr/0005-use-external-agent-runtimes.md)
+- [ADR-0006：分离 Rivloom Identity 与 Runtime Auth](../adr/0006-separate-rivloom-identity-from-runtime-auth.md)
 
 ## 16. 参考资料
 
