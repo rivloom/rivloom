@@ -31,3 +31,4 @@ directory, which is reserved for upstream Codex documentation.
 - [ADR-0004: Stable cwd protocol for local projects](adr/0004-use-stable-cwd-for-local-projects.md)
 - [ADR-0005: External Agent Runtimes](adr/0005-use-external-agent-runtimes.md)
 - [ADR-0006: Separate Rivloom Identity from Runtime Auth](adr/0006-separate-rivloom-identity-from-runtime-auth.md)
+- [ADR-0007: Temporary non-interactive sandbox for managed R2 runs](adr/0007-temporarily-disable-managed-run-approvals.md)

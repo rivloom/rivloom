@@ -5,7 +5,7 @@
 - 实现基线：`1c531ca9eb`
 - Gate 分支：`codex/r2-gate-docs`
 - 状态：R1/R2 实现与自动化验证完成；原生宽/窄窗口视觉 Gate 通过；真实 Codex
-  success/cancel Gate 被上游 App Server 审批线程崩溃阻塞
+  success/cancel Gate 待实施 ADR-0007 临时策略后复验
 
 ## 1. 结论
 
@@ -21,8 +21,10 @@ App Server 的 `codex-approval-review` 线程在 Windows 上稳定栈溢出。�
 `Get-Content -LiteralPath gate.txt`，App Server 仍会崩溃并断开。
 
 Rivloom 对该故障按设计 fail closed：Run 进入 `outcomeUnknown`，不会伪报成功或自动重跑；
-专用仓库的 checkout、HEAD 和基线文件均未改变。是否临时改用另一种审批策略属于安全与
-产品语义决策，本 Gate 没有静默替用户改变。
+专用仓库的 checkout、HEAD 和基线文件均未改变。项目已经通过
+[ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md) 接受只对 Rivloom 受管 R2
+Run 临时改用 `never + workspaceWrite + 单一 worktree + 禁网`。本记录提交时该策略尚待代码
+实施和真实 Gate 复验，不能把“决策已记录”误写成“运行已通过”。
 
 ## 2. 里程碑完成度
 
@@ -37,7 +39,7 @@ Rivloom 对该故障按设计 fail closed：Run 进入 `outcomeUnknown`，不会
 | R2.4 worktree 与 Patch Artifact  | 完成     | 通过                 | [PR #49](https://github.com/rivloom/rivloom/pull/49)、[#50](https://github.com/rivloom/rivloom/pull/50) |
 | R2.5 RunReceipt、编排、命令与 UI | 完成     | 自动化通过           | [PR #51](https://github.com/rivloom/rivloom/pull/51) 到 [#64](https://github.com/rivloom/rivloom/pull/64) |
 | R2 原生视觉 Gate                | 完成     | 通过                 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
-| R2 真实 success/cancel Gate     | 未完成   | 上游 Runtime 缺陷阻塞 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
+| R2 真实 success/cancel Gate     | 未完成   | 临时策略待实施与复验 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
 
 R3 及之后没有提前开始。当前代码仍是 Codex 专用路径，没有为了 Hermes、Reasonix、
 Claude Code 或未知第三 Runtime 创建万能适配器。
@@ -107,6 +109,10 @@ Codex Runtime。真实 turn 明确发送以下执行边界：
 - `networkAccess=false`；
 - Task thread 不注入个人 Skill instructions/catalog。
 
+本次失败 sidecar 报告版本为 `codex-app-server 0.0.0`，不足以唯一定位构建；已补充记录二进制
+SHA-256：`4F57C510209BE79AF617FF261A7293F71AD5B9D66411386C3D9DCC5A2D5C97FD`。
+以下结果描述的是切换前的 `on-request + auto_review` 基线。
+
 专用测试仓库证据：
 
 - checkout HEAD 始终为 `24acd311baf599a8f92db9788326df7c12b890bc`；
@@ -163,14 +169,16 @@ App Server 的 `codex-approval-review` 线程栈溢出，随后连接中断。Ri
 
 ## 9. 阻塞决策与下一步
 
-1. 保持当前 `on-request + auto_review` 策略并等待/升级到修复该 Windows 栈溢出的上游
-   Runtime；或者单独评审改为 `never`，或补齐 `user` reviewer 的本机审批交互。三者会改变
-   安全与无人值守语义，不能作为 Gate 内部修补静默选择。
-2. 上述策略确定且 Runtime 可稳定执行后，在同一专用仓库重跑 success、Patch、RunReceipt、
-   cancel 和 worktree cleanup Gate。
-3. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；
+1. 按 [ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md) 把 Rivloom 受管
+   R2 Run 改为 `approvalPolicy=never`，省略 `approvalsReviewer`，并保持唯一受管 worktree
+   可写和 `networkAccess=false`；用请求测试锁定该组合。
+2. 在同一专用仓库重跑 success、Patch、RunReceipt、cancel 和 worktree cleanup Gate，并
+   明确记录越界操作被拒绝时的终态；不得自动扩大权限或重跑未知结果。
+3. 未来恢复 `on-request + auto_review` 前必须满足 ADR-0007 的版本固定、原始回归、真实
+   审批、安全审查和独立 PR 条件；不得随 Runtime 升级静默切换。
+4. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；
    前一项合并后再把下一项 base 改回 `main`。
-4. Runtime Gate 补齐且 R1/R2 stack 审查合并后进入 R3.1；不提前开发第二 Runtime、
+5. Runtime Gate 补齐且 R1/R2 stack 审查合并后进入 R3.1；不提前开发第二 Runtime、
    Marketplace 或 Skill Directory。
 
 CI 继续保持暂停；本记录不以缺少 CI 失败邮件代替任何本地测试证据。

@@ -218,6 +218,12 @@ Runtime payload。
 6. 完成后 Node 从 worktree 收集 Patch、测试结果与有界摘要。
 7. Node 生成 `RunReceipt` 并上传允许共享的 Artifact。
 
+R2 单机 Gate 有一个明确的临时例外：按
+[ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md)，Rivloom 受管 Codex Run
+使用 `approvalPolicy=never`、唯一受管 worktree 可写并禁网。需要例外权限的操作在本机
+失败，不进入自动或人工审批。上述第 5 项仍是恢复审批能力以及 R3/R4 本地 Node 流程的目标，
+不能把 R2 临时策略扩展成长期产品语义。
+
 任务详情可以展示有限的事件时间线，但不把无限对话历史或原始 JSONL 同步给 Brain。
 
 ## 9. UI 演进
@@ -240,6 +246,8 @@ Runtime payload。
 - Brain 不保存 Runtime 凭证，不代替 Node 登录 Runtime。
 - 执行必须绑定一次接受记录、项目映射、Run ID 和幂等键。
 - 默认在隔离 worktree 运行；不能静默写入用户当前 checkout。
+- R2 临时无人值守模式不能请求沙箱例外、联网或自动降级重跑；恢复审批必须满足
+  ADR-0007 的显式退出条件。
 - Artifact 有单项和总量硬上限，并校验内容哈希。
 - 未知协议版本、身份不匹配或签名失败时拒绝降级。
 - 高风险本地审批不允许由远端自动确认。
@@ -272,7 +280,7 @@ Claude Code、Hermes、Reasonix 等在进入里程碑前分别审查当时固定
 | Bob 拒绝或无项目映射 | Task 保持未执行 | Alice 可撤回或改派 |
 | Brain 断线但 Node 未开始 | 保持 accepted/queued | 重连对账后再开始 |
 | 运行中断线 | `outcomeUnknown` | 不自动重跑，等待 Node 回执 |
-| Codex 需要审批 | `waitingApproval` | 由 Bob 本地处理 |
+| Codex 需要例外权限 | R2 拒绝；恢复审批后为 `waitingApproval` | R2 不扩权；后续由 Bob 本地处理 |
 | App Server 崩溃 | Run 失败或未知 | 保留 worktree 和诊断，显式重试 |
 | Patch 超限或校验失败 | Artifact 不可审查 | 仅回传摘要，要求本地或分片处理 |
 | Node 重复收到请求 | 不重复执行 | 按 Run 幂等键返回已有状态 |
