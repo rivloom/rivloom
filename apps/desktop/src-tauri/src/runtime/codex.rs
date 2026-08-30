@@ -11,7 +11,7 @@ use crate::app_server::event_router::EventRouter;
 use crate::app_server::event_router::EventRouterError;
 use crate::app_server::event_router::RunEvent;
 use crate::app_server::event_router::RunEventStream;
-use crate::project::ResolvedProject;
+use crate::task::worktree::TaskWorktree;
 
 const MAX_CORRELATION_ID_BYTES: usize = 128;
 pub(crate) const MAX_RUN_PROMPT_BYTES: usize = 4 * 1024;
@@ -20,7 +20,7 @@ pub(crate) struct CodexRunRequest<'a> {
     pub(crate) run_id: &'a str,
     pub(crate) thread_id: &'a str,
     pub(crate) prompt: &'a str,
-    pub(crate) project: &'a ResolvedProject,
+    pub(crate) worktree: &'a TaskWorktree,
 }
 
 pub(crate) struct ActiveCodexRun {
@@ -87,7 +87,7 @@ impl CodexRuntime {
                     "threadId": request.thread_id,
                     "clientUserMessageId": request.run_id,
                     "input": [{"type": "text", "text": request.prompt}],
-                    "cwd": request.project.cwd(),
+                    "cwd": request.worktree.cwd(),
                 }),
             )
             .map_err(map_connection_error)?;
