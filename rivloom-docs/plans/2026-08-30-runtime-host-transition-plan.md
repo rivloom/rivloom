@@ -17,7 +17,7 @@
 | ------------------ | -------------------------------------------- | --------------------------------------------------- |
 | R0 路线收尾        | 已进入 `main`                                | 无                                                  |
 | R1 身份分离        | 本地实现与自动化验证完成；PR #41/#42/#44 已创建 | 按 stacked 顺序审查和合并                         |
-| R2 单机 Task Run   | 实现、自动化和视觉 Gate 完成；PR #45–#66 已创建 | 实施 ADR-0007 并重跑真实 success/cancel Gate      |
+| R2 单机 Task Run   | 实现、自动化和视觉 Gate 完成；Windows 沙箱实施待决 | 选定兼容隔离 Home 的沙箱方案后重跑 success/cancel Gate |
 | R3 最小 Brain      | 未开始                                       | R2 发布和原生 smoke 完成后冻结协作协议 v1           |
 | R4 远端委派        | 未开始                                       | 依赖 Gate R3                                        |
 | R5 Artifact 审查   | 未开始                                       | 依赖 Gate R4                                        |
@@ -28,9 +28,10 @@
 剩余限制见 [R1/R2 验证记录](2026-08-30-runtime-host-r1-r2-verification.md)。CI 仍按当前
 项目决定保持暂停，不作为本地 Gate 通过的替代证据。
 
-R2 的临时 Runtime 审批策略、严格安全边界和恢复条件由
-[ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md) 固定。不得因 Runtime 升级
-静默恢复自动审批，也不得为了通过 Gate 放宽 worktree 或网络沙箱。
+R2 的目标临时 Runtime 审批策略、严格安全边界和恢复条件由
+[ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md) 固定；其 Windows 实施仍被多
+Runtime Home 的 elevated 沙箱凭据冲突阻塞。不得因 Runtime 升级静默恢复自动审批，也不得
+为了通过 Gate 放宽 worktree 或网络沙箱。
 
 ---
 
