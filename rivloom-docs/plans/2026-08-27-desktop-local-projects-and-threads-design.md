@@ -5,6 +5,11 @@
 - 基准：`27f9a2d03c782ed151ef43b2f951eb64cd2e578b`
 - 决策：Rivloom 本地最近项目 + 稳定 App Server `cwd` thread API
 
+> 路线更新（2026-08-30）：A2 实现继续保留，并作为 Node 的本地资源映射使用。本文原定
+> 的完整 A3 Chat/历史阶段不再是唯一下一步；当前顺序以
+> [Runtime Host 与协作闭环设计](2026-08-30-runtime-host-collaboration-design.md)为准，先完成
+> 最小本地 Task Run，再尽快进入两 Node 委派。
+
 ## 1. 目标与成功标准
 
 A2 把已完成的启动和账号基础扩展为本地项目入口。用户可以选择一个现有目录，在首页

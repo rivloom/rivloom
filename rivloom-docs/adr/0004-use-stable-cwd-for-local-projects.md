@@ -26,6 +26,11 @@ Rivloom 在自己的本地应用数据目录中维护一个有界的最近项目
   统一设计。
 - 初始化不启用 `experimentalApi`，请求中不发送 `projectId`。
 
+在 Runtime Host 架构中，这个最近项目列表继续作为 Node 的本地资源登记表。Brain 和
+其他 Node 只能引用不透明项目 ID 和允许展示的名称，不能接收此处保存的绝对 `cwd`。
+当前 Codex Runtime 仍通过稳定 `cwd` 映射；未来 Runtime 可以在 Node 内部使用自己的
+本地映射方式。
+
 目录选择由固定 Rust/Tauri 命令通过官方对话框插件发起，选择结果直接在后端验证和
 登记；React 不接收可回传为授权依据的任意路径，也不获得任意文件读写能力。选择项目
 或浏览历史不会调用 `turn/start`，只有用户明确创建会话时才调用 `thread/start`，仍不会
@@ -69,6 +74,7 @@ Rivloom 项目服务本身不扫描或读取项目文件内容。
 
 - [Rivloom Desktop 架构设计](../plans/2026-08-24-rivloom-desktop-architecture-design.md)
 - [A2 本地项目与会话设计](../plans/2026-08-27-desktop-local-projects-and-threads-design.md)
+- [Runtime Host 与协作闭环设计](../plans/2026-08-30-runtime-host-collaboration-design.md)
 - `codex-rs/app-server/README.md`
 - `codex-rs/app-server-protocol/src/protocol/v2/thread.rs`
 - `codex-rs/app-server-protocol/src/protocol/v2/project.rs`
