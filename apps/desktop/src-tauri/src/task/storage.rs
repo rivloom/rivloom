@@ -22,6 +22,8 @@ const STORAGE_VERSION: u32 = 1;
 const MAX_STORAGE_BYTES: u64 = 2 * 1024 * 1024;
 pub(super) const MAX_STORED_TASKS: usize = 100;
 pub(super) const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
+const PROJECT_ID_PREFIX: &str = "project-v1-";
+const PROJECT_ID_DIGEST_BYTES: usize = 64;
 static UNIQUE_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -35,6 +37,8 @@ pub(super) struct StoredRunKey {
 #[serde(rename_all = "camelCase")]
 pub(super) struct StoredTask {
     pub(super) idempotency_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) project_id: Option<String>,
     pub(super) record: TaskRecord,
     pub(super) run_keys: Vec<StoredRunKey>,
 }
@@ -155,6 +159,15 @@ pub(super) fn valid_idempotency_key(key: &str) -> bool {
     !key.trim().is_empty() && key.len() <= MAX_IDEMPOTENCY_KEY_BYTES
 }
 
+pub(super) fn valid_project_id(project_id: &str) -> bool {
+    project_id
+        .strip_prefix(PROJECT_ID_PREFIX)
+        .is_some_and(|digest| {
+            digest.len() == PROJECT_ID_DIGEST_BYTES
+                && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+}
+
 fn validate_tasks(tasks: &[StoredTask]) -> Result<(), StorageError> {
     if tasks.len() > MAX_STORED_TASKS {
         return Err(StorageError::InvalidData);
@@ -167,6 +180,10 @@ fn validate_tasks(tasks: &[StoredTask]) -> Result<(), StorageError> {
             .map_err(|_| StorageError::InvalidData)?;
         if !task_ids.insert(&task.record.id)
             || !valid_idempotency_key(&task.idempotency_key)
+            || task
+                .project_id
+                .as_deref()
+                .is_some_and(|project_id| !valid_project_id(project_id))
             || !task_keys.insert(&task.idempotency_key)
             || task.run_keys.len() > MAX_EVENTS
         {

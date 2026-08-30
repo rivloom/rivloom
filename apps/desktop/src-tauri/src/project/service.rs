@@ -29,6 +29,10 @@ pub(crate) struct ResolvedProject {
 }
 
 impl ResolvedProject {
+    pub(crate) fn id(&self) -> &str {
+        &self.project.id
+    }
+
     pub(crate) fn cwd(&self) -> &str {
         &self.project.path
     }

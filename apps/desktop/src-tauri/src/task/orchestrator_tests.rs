@@ -148,6 +148,16 @@ fn invalid_prompt_and_unknown_turn_start_are_bounded_before_or_after_the_runtime
         TaskStatus::Accepted
     );
 
+    let mismatched = Fixture::new("goal", Ok(turn_response()));
+    let mut mismatched_request = mismatched.request();
+    let other_project = format!("project-v1-{}", "f".repeat(64));
+    mismatched_request.project_id = &other_project;
+    assert_eq!(
+        mismatched.runner.start(mismatched_request).err(),
+        Some(TaskRunError::InvalidRequest)
+    );
+    assert_eq!(mismatched.connection.requests(), vec![]);
+
     let disconnected = Fixture::new("goal", Err(ConnectionError::Disconnected));
     let LocalCodexRunStart::Finished(completion) =
         disconnected.runner.start(disconnected.request()).unwrap()
@@ -202,6 +212,7 @@ impl Fixture {
         store
             .save(&[StoredTask {
                 idempotency_key: "create-1".to_string(),
+                project_id: Some(project.id().to_string()),
                 record,
                 run_keys: vec![],
             }])
@@ -228,6 +239,7 @@ impl Fixture {
 
     fn request(&self) -> StartLocalCodexRunRequest<'_> {
         StartLocalCodexRunRequest {
+            project_id: self.project.id(),
             task_id: "task-1",
             run_id: "run-1",
             node_id: "node-1",

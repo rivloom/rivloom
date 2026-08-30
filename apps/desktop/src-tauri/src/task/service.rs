@@ -11,6 +11,7 @@ use super::storage::StoredTask;
 use super::storage::TaskStore;
 use super::storage::normalize_tasks;
 use super::storage::valid_idempotency_key;
+use super::storage::valid_project_id;
 use super::types::RunRecord;
 use super::types::RunStatus;
 use super::types::TaskRecord;
@@ -21,6 +22,7 @@ use super::types::TransitionDetails;
 pub(super) struct CreateTaskRequest {
     pub(super) task_id: String,
     pub(super) idempotency_key: String,
+    pub(super) project_id: String,
     pub(super) spec: TaskSpec,
 }
 
@@ -28,6 +30,7 @@ pub(super) struct RegisterRunRequest {
     pub(super) task_id: String,
     pub(super) run_id: String,
     pub(super) idempotency_key: String,
+    pub(super) project_id: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,6 +59,9 @@ impl TaskService {
         if !valid_idempotency_key(&request.idempotency_key) {
             return Err(TaskServiceError::InvalidIdempotencyKey);
         }
+        if !valid_project_id(&request.project_id) {
+            return Err(TaskServiceError::InvalidProjectId);
+        }
         let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
         self.ensure_loaded(&mut cache)?;
         let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
@@ -63,6 +69,9 @@ impl TaskService {
             .iter()
             .find(|task| task.idempotency_key == request.idempotency_key)
         {
+            if existing.project_id.as_deref() != Some(request.project_id.as_str()) {
+                return Err(TaskServiceError::IdempotencyConflict);
+            }
             return Ok(existing.record.clone());
         }
         let record = TaskRecord::new(request.task_id, request.spec)?;
@@ -71,6 +80,7 @@ impl TaskService {
             0,
             StoredTask {
                 idempotency_key: request.idempotency_key,
+                project_id: Some(request.project_id),
                 record: record.clone(),
                 run_keys: vec![],
             },
@@ -81,12 +91,21 @@ impl TaskService {
         Ok(record)
     }
 
-    pub(super) fn list_tasks(&self) -> Result<Vec<TaskRecord>, TaskServiceError> {
+    pub(super) fn list_tasks(&self, project_id: &str) -> Result<Vec<TaskRecord>, TaskServiceError> {
+        if !valid_project_id(project_id) {
+            return Err(TaskServiceError::InvalidProjectId);
+        }
         let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
         self.ensure_loaded(&mut cache)?;
         cache
             .as_ref()
-            .map(|tasks| tasks.iter().map(|task| task.record.clone()).collect())
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|task| task.project_id.as_deref() == Some(project_id))
+                    .map(|task| task.record.clone())
+                    .collect()
+            })
             .ok_or(TaskServiceError::State)
     }
 
@@ -100,13 +119,43 @@ impl TaskService {
             .ok_or(TaskServiceError::TaskNotFound)
     }
 
-    pub(super) fn accept_task(&self, task_id: &str) -> Result<TaskRecord, TaskServiceError> {
+    pub(super) fn get_project_task(
+        &self,
+        project_id: &str,
+        task_id: &str,
+    ) -> Result<TaskRecord, TaskServiceError> {
+        if !valid_project_id(project_id) {
+            return Err(TaskServiceError::InvalidProjectId);
+        }
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        cache
+            .as_ref()
+            .and_then(|tasks| {
+                tasks.iter().find(|task| {
+                    task.project_id.as_deref() == Some(project_id) && task.record.id == task_id
+                })
+            })
+            .map(|task| task.record.clone())
+            .ok_or(TaskServiceError::TaskNotFound)
+    }
+
+    pub(super) fn accept_task(
+        &self,
+        project_id: &str,
+        task_id: &str,
+    ) -> Result<TaskRecord, TaskServiceError> {
+        if !valid_project_id(project_id) {
+            return Err(TaskServiceError::InvalidProjectId);
+        }
         let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
         self.ensure_loaded(&mut cache)?;
         let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
         let task_index = tasks
             .iter()
-            .position(|task| task.record.id == task_id)
+            .position(|task| {
+                task.project_id.as_deref() == Some(project_id) && task.record.id == task_id
+            })
             .ok_or(TaskServiceError::TaskNotFound)?;
         let mut next = tasks.clone();
         match next[task_index].record.status {
@@ -143,12 +192,18 @@ impl TaskService {
         if !valid_idempotency_key(&request.idempotency_key) {
             return Err(TaskServiceError::InvalidIdempotencyKey);
         }
+        if !valid_project_id(&request.project_id) {
+            return Err(TaskServiceError::InvalidProjectId);
+        }
         let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
         self.ensure_loaded(&mut cache)?;
         let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
         let task_index = tasks
             .iter()
-            .position(|task| task.record.id == request.task_id)
+            .position(|task| {
+                task.project_id.as_deref() == Some(request.project_id.as_str())
+                    && task.record.id == request.task_id
+            })
             .ok_or(TaskServiceError::TaskNotFound)?;
         if let Some(existing) = tasks[task_index]
             .run_keys
@@ -338,6 +393,10 @@ pub(super) enum TaskServiceError {
     TaskNotFound,
     #[error("idempotency key is invalid")]
     InvalidIdempotencyKey,
+    #[error("idempotency key belongs to another local project")]
+    IdempotencyConflict,
+    #[error("project id is invalid")]
+    InvalidProjectId,
     #[error("task or run state is invalid")]
     StateMachine,
 }

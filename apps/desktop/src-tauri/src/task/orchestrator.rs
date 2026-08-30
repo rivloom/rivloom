@@ -43,6 +43,7 @@ const RUNTIME_FAILED_MESSAGE: &str = "Codex Runtime reported that the run failed
 const OUTCOME_UNKNOWN_MESSAGE: &str = "The Codex run outcome could not be verified.";
 
 pub(crate) struct StartLocalCodexRunRequest<'a> {
+    pub(crate) project_id: &'a str,
     pub(crate) task_id: &'a str,
     pub(crate) run_id: &'a str,
     pub(crate) node_id: &'a str,
@@ -107,7 +108,9 @@ impl LocalCodexRunService {
         request: StartLocalCodexRunRequest<'_>,
     ) -> Result<LocalCodexRunStart, TaskRunError> {
         validate_metadata(&request)?;
-        let task = self.tasks.get_task(request.task_id)?;
+        let task = self
+            .tasks
+            .get_project_task(request.project_id, request.task_id)?;
         let run = task
             .runs
             .iter()
@@ -377,7 +380,8 @@ fn task_prompt(spec: &TaskSpec) -> Result<String, TaskRunError> {
 }
 
 fn validate_metadata(request: &StartLocalCodexRunRequest<'_>) -> Result<(), TaskRunError> {
-    if !valid_id(request.task_id)
+    if request.project.id() != request.project_id
+        || !valid_id(request.task_id)
         || !valid_id(request.run_id)
         || !valid_id(request.node_id)
         || request.runtime_version.trim().is_empty()

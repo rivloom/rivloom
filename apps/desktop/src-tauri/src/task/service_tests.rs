@@ -53,6 +53,7 @@ fn repeated_run_idempotency_key_returns_the_original_across_restarts() {
     store
         .save(&[StoredTask {
             idempotency_key: "create-1".to_string(),
+            project_id: Some(project_id()),
             record: task,
             run_keys: vec![],
         }])
@@ -93,12 +94,51 @@ fn local_task_listing_and_acceptance_are_persisted_and_idempotent() {
         .transition(TaskStatus::Accepted, TransitionDetails::default())
         .unwrap();
 
-    assert_eq!(service.list_tasks().unwrap(), vec![draft]);
-    assert_eq!(service.accept_task("task-1").unwrap(), accepted);
-    assert_eq!(service.accept_task("task-1").unwrap(), accepted);
+    assert_eq!(service.list_tasks(&project_id()).unwrap(), vec![draft]);
+    assert_eq!(
+        service.accept_task(&project_id(), "task-1").unwrap(),
+        accepted
+    );
+    assert_eq!(
+        service.accept_task(&project_id(), "task-1").unwrap(),
+        accepted
+    );
 
     let restarted = TaskService::new(TaskStore::new(path));
-    assert_eq!(restarted.list_tasks().unwrap(), vec![accepted]);
+    assert_eq!(restarted.list_tasks(&project_id()).unwrap(), vec![accepted]);
+}
+
+#[test]
+fn project_binding_filters_listing_and_rejects_cross_project_task_use() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let service = TaskService::new(TaskStore::new(temp_dir.path().join("tasks-v1.json")));
+    let task = service
+        .create_task(create_request("task-1", "create-1"))
+        .unwrap();
+    let other_project = format!("project-v1-{}", "b".repeat(64));
+
+    assert_eq!(service.list_tasks(&project_id()).unwrap(), vec![task]);
+    assert_eq!(service.list_tasks(&other_project).unwrap(), vec![]);
+    assert_eq!(
+        service.get_project_task(&other_project, "task-1"),
+        Err(TaskServiceError::TaskNotFound)
+    );
+    assert_eq!(
+        service.accept_task(&other_project, "task-1"),
+        Err(TaskServiceError::TaskNotFound)
+    );
+    let mut request = run_request("run-1", "run-key-1");
+    request.project_id = other_project.clone();
+    assert_eq!(
+        service.register_run(request),
+        Err(TaskServiceError::TaskNotFound)
+    );
+    let mut conflicting = create_request("task-2", "create-1");
+    conflicting.project_id = other_project;
+    assert_eq!(
+        service.create_task(conflicting),
+        Err(TaskServiceError::IdempotencyConflict)
+    );
 }
 
 #[test]
@@ -121,6 +161,7 @@ fn a_run_start_is_claimed_once_and_progress_transitions_are_idempotent() {
     TaskStore::new(path.clone())
         .save(&[StoredTask {
             idempotency_key: "create-1".to_string(),
+            project_id: Some(project_id()),
             record: queued.clone(),
             run_keys: vec![],
         }])
@@ -186,6 +227,7 @@ fn every_terminal_receipt_is_persisted_atomically_and_idempotently_across_restar
         TaskStore::new(path.clone())
             .save(&[StoredTask {
                 idempotency_key: "create-1".to_string(),
+                project_id: Some(project_id()),
                 record: running_task(),
                 run_keys: vec![],
             }])
@@ -221,6 +263,7 @@ fn a_different_receipt_never_overwrites_the_first_terminal_result() {
     TaskStore::new(path.clone())
         .save(&[StoredTask {
             idempotency_key: "create-1".to_string(),
+            project_id: Some(project_id()),
             record: running_task(),
             run_keys: vec![],
         }])
@@ -243,6 +286,7 @@ fn create_request(task_id: &str, idempotency_key: &str) -> CreateTaskRequest {
     CreateTaskRequest {
         task_id: task_id.to_string(),
         idempotency_key: idempotency_key.to_string(),
+        project_id: project_id(),
         spec: TaskSpec::new("goal", vec!["bounded".to_string()]),
     }
 }
@@ -252,7 +296,12 @@ fn run_request(run_id: &str, idempotency_key: &str) -> RegisterRunRequest {
         task_id: "task-1".to_string(),
         run_id: run_id.to_string(),
         idempotency_key: idempotency_key.to_string(),
+        project_id: project_id(),
     }
+}
+
+fn project_id() -> String {
+    format!("project-v1-{}", "a".repeat(64))
 }
 
 fn accepted_task() -> TaskRecord {
