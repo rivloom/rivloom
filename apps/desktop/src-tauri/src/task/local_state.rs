@@ -191,7 +191,11 @@ impl TaskRunState {
             LocalCodexRunStart::Active(active) => {
                 self.spawn_active(request.project_id, *active)?;
             }
-            LocalCodexRunStart::Existing(_) => {}
+            LocalCodexRunStart::Existing(existing) => {
+                if existing.id != run_id {
+                    return Err(LocalTaskError::State);
+                }
+            }
             LocalCodexRunStart::Finished(completion) => {
                 publish_completion(&self.inner, request.project_id, &task_id, *completion);
             }

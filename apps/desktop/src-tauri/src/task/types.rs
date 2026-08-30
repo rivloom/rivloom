@@ -113,6 +113,7 @@ pub(crate) struct TransitionDetails {
 }
 
 impl TransitionDetails {
+    #[cfg(test)]
     pub(crate) fn with_summary(summary: impl Into<String>) -> Self {
         Self {
             summary: Some(summary.into()),

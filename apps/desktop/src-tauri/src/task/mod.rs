@@ -1,4 +1,5 @@
 mod artifact;
+pub(crate) mod commands;
 mod local_state;
 mod orchestrator;
 mod receipt;

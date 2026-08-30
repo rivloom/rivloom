@@ -5,7 +5,6 @@ mod project;
 #[allow(dead_code)]
 mod runtime;
 pub mod runtime_status;
-#[allow(dead_code)]
 mod task;
 
 use std::sync::Arc;
@@ -164,6 +163,9 @@ fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send
         project::commands::list_project_threads,
         project::commands::start_project_thread,
         project::commands::read_project_thread,
+        task::commands::list_local_tasks,
+        task::commands::start_local_task,
+        task::commands::stop_local_task,
     ]
 }
 
@@ -195,7 +197,7 @@ pub fn run() {
                 app.handle().clone(),
                 codex_home,
                 account_service,
-                task_events,
+                task_events.clone(),
             );
             if !app.manage(state) {
                 return Err(std::io::Error::other("App Server state was already managed").into());
@@ -222,6 +224,16 @@ pub fn run() {
             ));
             if !app.manage(identity_service) {
                 return Err(std::io::Error::other("Identity service was already managed").into());
+            }
+            let task_state = task::commands::create_task_state(
+                app.handle().clone(),
+                app_data.join("tasks").join("tasks-v1.json"),
+                app_data.join("tasks").join("worktrees"),
+                task_events,
+            )
+            .map_err(|_| std::io::Error::other("Task state could not be initialized"))?;
+            if !app.manage(task_state) {
+                return Err(std::io::Error::other("Task state was already managed").into());
             }
 
             let app_handle = app.handle().clone();
