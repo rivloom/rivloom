@@ -2,6 +2,7 @@ use pretty_assertions::assert_eq;
 use sha2::Digest;
 use sha2::Sha256;
 
+use super::BeginRunResult;
 use super::CreateTaskRequest;
 use super::RegisterRunRequest;
 use super::TaskService;
@@ -84,6 +85,49 @@ fn unknown_tasks_are_rejected_without_creating_a_run() {
     assert_eq!(
         service.register_run(run_request("run-1", "run-key-1")),
         Err(TaskServiceError::TaskNotFound)
+    );
+}
+
+#[test]
+fn a_run_start_is_claimed_once_and_progress_transitions_are_idempotent() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("tasks-v1.json");
+    let mut queued = accepted_task();
+    queued.register_run("run-1").unwrap();
+    TaskStore::new(path.clone())
+        .save(&[StoredTask {
+            idempotency_key: "create-1".to_string(),
+            record: queued.clone(),
+            run_keys: vec![],
+        }])
+        .unwrap();
+    let service = TaskService::new(TaskStore::new(path));
+    let mut expected = queued;
+    expected
+        .transition(TaskStatus::Running, TransitionDetails::default())
+        .unwrap();
+    expected
+        .transition_run("run-1", RunStatus::Running, TransitionDetails::default())
+        .unwrap();
+
+    assert_eq!(
+        service.begin_run("task-1", "run-1").unwrap(),
+        BeginRunResult::Started(expected.runs[0].clone())
+    );
+    assert_eq!(service.get_task("task-1").unwrap(), expected);
+    assert_eq!(
+        service.begin_run("task-1", "run-1").unwrap(),
+        BeginRunResult::Existing(expected.runs[0].clone())
+    );
+    let waiting = service
+        .transition_run("task-1", "run-1", RunStatus::WaitingApproval)
+        .unwrap();
+    assert_eq!(waiting.status, RunStatus::WaitingApproval);
+    assert_eq!(
+        service
+            .transition_run("task-1", "run-1", RunStatus::WaitingApproval)
+            .unwrap(),
+        waiting
     );
 }
 

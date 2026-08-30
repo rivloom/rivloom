@@ -30,6 +30,12 @@ pub(super) struct RegisterRunRequest {
     pub(super) idempotency_key: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum BeginRunResult {
+    Started(RunRecord),
+    Existing(RunRecord),
+}
+
 pub(super) struct TaskService {
     store: TaskStore,
     tasks: Mutex<Option<Vec<StoredTask>>>,
@@ -124,6 +130,89 @@ impl TaskService {
             .runs
             .iter()
             .find(|run| run.id == request.run_id)
+            .cloned()
+            .ok_or(TaskServiceError::State)?;
+        *cache = Some(next);
+        Ok(run)
+    }
+
+    pub(super) fn begin_run(
+        &self,
+        task_id: &str,
+        run_id: &str,
+    ) -> Result<BeginRunResult, TaskServiceError> {
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
+        let task_index = tasks
+            .iter()
+            .position(|task| task.record.id == task_id)
+            .ok_or(TaskServiceError::TaskNotFound)?;
+        let run = tasks[task_index]
+            .record
+            .runs
+            .iter()
+            .find(|run| run.id == run_id)
+            .ok_or(TaskServiceError::StateMachine)?;
+        if run.status != RunStatus::Queued {
+            return Ok(BeginRunResult::Existing(run.clone()));
+        }
+        if tasks[task_index].record.status != TaskStatus::Accepted {
+            return Err(TaskServiceError::StateMachine);
+        }
+        let mut next = tasks.clone();
+        next[task_index]
+            .record
+            .transition(TaskStatus::Running, TransitionDetails::default())?;
+        next[task_index].record.transition_run(
+            run_id,
+            RunStatus::Running,
+            TransitionDetails::default(),
+        )?;
+        self.store.save(&next)?;
+        let run = next[task_index]
+            .record
+            .runs
+            .iter()
+            .find(|run| run.id == run_id)
+            .cloned()
+            .ok_or(TaskServiceError::State)?;
+        *cache = Some(next);
+        Ok(BeginRunResult::Started(run))
+    }
+
+    pub(super) fn transition_run(
+        &self,
+        task_id: &str,
+        run_id: &str,
+        status: RunStatus,
+    ) -> Result<RunRecord, TaskServiceError> {
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
+        let task_index = tasks
+            .iter()
+            .position(|task| task.record.id == task_id)
+            .ok_or(TaskServiceError::TaskNotFound)?;
+        let current = tasks[task_index]
+            .record
+            .runs
+            .iter()
+            .find(|run| run.id == run_id)
+            .ok_or(TaskServiceError::StateMachine)?;
+        if current.status == status {
+            return Ok(current.clone());
+        }
+        let mut next = tasks.clone();
+        next[task_index]
+            .record
+            .transition_run(run_id, status, TransitionDetails::default())?;
+        self.store.save(&next)?;
+        let run = next[task_index]
+            .record
+            .runs
+            .iter()
+            .find(|run| run.id == run_id)
             .cloned()
             .ok_or(TaskServiceError::State)?;
         *cache = Some(next);
