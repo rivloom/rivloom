@@ -1,4 +1,5 @@
 mod artifact;
+mod orchestrator;
 mod receipt;
 mod service;
 mod state_machine;
