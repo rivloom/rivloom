@@ -11,7 +11,7 @@ use crate::account::login::UrlOpener;
 use crate::account::login::is_cancel_confirmation;
 use crate::account::login::parse_login_response;
 use crate::account::login::parse_official_auth_url;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
 use crate::app_server::ConnectionIdentity;
@@ -39,7 +39,7 @@ pub(crate) struct AccountService {
 struct AccountServiceInner {
     browser_open_operation: Mutex<()>,
     login_operation: Mutex<()>,
-    published_status: Mutex<Option<AccountStatus>>,
+    published_status: Mutex<Option<CodexRuntimeAuthStatus>>,
     state: Mutex<AccountServiceState>,
     status_observer: Arc<dyn AccountStatusObserver>,
     task_spawner: Arc<dyn TaskSpawner>,
@@ -53,7 +53,7 @@ struct AccountServiceState {
     login_completion: LoginCompletionState,
     login_attempt: Option<LoginAttempt>,
     refresh_revision: u64,
-    status: AccountStatus,
+    status: CodexRuntimeAuthStatus,
 }
 
 #[derive(Clone)]
@@ -118,7 +118,7 @@ impl AccountService {
                     login_completion: LoginCompletionState::default(),
                     login_attempt: None,
                     refresh_revision: 0,
-                    status: AccountStatus::Checking,
+                    status: CodexRuntimeAuthStatus::Checking,
                 }),
                 status_observer,
                 task_spawner,
@@ -127,7 +127,7 @@ impl AccountService {
         }
     }
 
-    pub(crate) fn connect(&self, connection: Arc<dyn ConnectionControl>) -> AccountStatus {
+    pub(crate) fn connect(&self, connection: Arc<dyn ConnectionControl>) -> CodexRuntimeAuthStatus {
         let connection_identity = connection.connection_identity();
         let _browser_open = self
             .inner
@@ -145,14 +145,14 @@ impl AccountService {
             state.connection_identity = Some(connection_identity);
             state.login_completion.reset();
             state.login_attempt = None;
-            state.status = AccountStatus::Checking;
+            state.status = CodexRuntimeAuthStatus::Checking;
             state.status.clone()
         };
         self.publish_status(&status);
         status
     }
 
-    pub(crate) fn disconnect(&self) -> AccountStatus {
+    pub(crate) fn disconnect(&self) -> CodexRuntimeAuthStatus {
         let _browser_open = self
             .inner
             .browser_open_operation
@@ -176,7 +176,7 @@ impl AccountService {
         status
     }
 
-    pub(crate) fn status(&self) -> AccountStatus {
+    pub(crate) fn status(&self) -> CodexRuntimeAuthStatus {
         self.inner
             .state
             .lock()
@@ -185,7 +185,7 @@ impl AccountService {
             .clone()
     }
 
-    pub(crate) fn refresh(&self) -> AccountStatus {
+    pub(crate) fn refresh(&self) -> CodexRuntimeAuthStatus {
         let (connection, connection_revision, refresh_revision) = {
             let mut state = self
                 .inner
@@ -236,7 +236,7 @@ impl AccountService {
         status
     }
 
-    pub(crate) fn start_browser_login(&self) -> AccountStatus {
+    pub(crate) fn start_browser_login(&self) -> CodexRuntimeAuthStatus {
         let _operation = self
             .inner
             .login_operation
@@ -299,7 +299,7 @@ impl AccountService {
         match self.finish_login_start_with_attempt(
             connection_revision,
             attempt.clone(),
-            AccountStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending,
         ) {
             StartedAttemptDisposition::Installed => {}
             StartedAttemptDisposition::Completed => {
@@ -331,7 +331,7 @@ impl AccountService {
         status
     }
 
-    fn prepare_login(&self) -> Result<(Arc<dyn ConnectionControl>, u64), AccountStatus> {
+    fn prepare_login(&self) -> Result<(Arc<dyn ConnectionControl>, u64), CodexRuntimeAuthStatus> {
         self.cancel_active_attempt()?;
         let mut state = self
             .inner
@@ -350,7 +350,7 @@ impl AccountService {
         Ok((connection, connection_revision))
     }
 
-    fn cancel_active_attempt(&self) -> Result<(), AccountStatus> {
+    fn cancel_active_attempt(&self) -> Result<(), CodexRuntimeAuthStatus> {
         let (connection, connection_revision, login_id) = {
             let state = self
                 .inner
@@ -405,8 +405,8 @@ impl AccountService {
     fn set_status_for_connection(
         &self,
         connection_revision: u64,
-        status: AccountStatus,
-    ) -> AccountStatus {
+        status: CodexRuntimeAuthStatus,
+    ) -> CodexRuntimeAuthStatus {
         let mut state = self
             .inner
             .state
@@ -426,29 +426,29 @@ mod login_completion;
 mod read;
 mod status_observer;
 
-fn retryable_account_error() -> AccountStatus {
-    AccountStatus::Error {
+fn retryable_account_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: ACCOUNT_UNAVAILABLE_MESSAGE.to_string(),
         retryable: true,
     }
 }
 
-fn login_unavailable_error() -> AccountStatus {
-    AccountStatus::Error {
+fn login_unavailable_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: LOGIN_UNAVAILABLE_MESSAGE.to_string(),
         retryable: true,
     }
 }
 
-fn browser_open_error() -> AccountStatus {
-    AccountStatus::Error {
+fn browser_open_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: BROWSER_OPEN_MESSAGE.to_string(),
         retryable: true,
     }
 }
 
-fn unsupported_account_error() -> AccountStatus {
-    AccountStatus::Error {
+fn unsupported_account_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: UNSUPPORTED_ACCOUNT_MESSAGE.to_string(),
         retryable: false,
     }

@@ -20,7 +20,7 @@ use super::tests::RecordedRequest;
 use super::tests::browser_login_response;
 use super::tests::browser_start_request;
 use super::tests::request;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
 use crate::app_server::ConnectionIdentity;
@@ -38,7 +38,10 @@ fn matching_completion_before_browser_attempt_install_skips_temporary_state() {
         vec!["early-browser".to_string()],
     );
 
-    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::Checking
+    );
     assert_eq!(
         (
             service.status(),
@@ -47,7 +50,7 @@ fn matching_completion_before_browser_attempt_install_skips_temporary_state() {
             connection.requests(),
         ),
         (
-            AccountStatus::Checking,
+            CodexRuntimeAuthStatus::Checking,
             vec![],
             1,
             vec![browser_start_request()],
@@ -93,8 +96,8 @@ fn completion_from_previous_connection_cannot_finish_a_new_login_start() {
     assert_eq!(
         (login.join().unwrap(), service.status(), tasks.len()),
         (
-            AccountStatus::BrowserPending,
-            AccountStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending,
             0,
         )
     );
@@ -119,7 +122,7 @@ fn account_update_from_previous_connection_does_not_schedule_a_refresh() {
 
     assert_eq!(
         (service.status(), tasks.len()),
-        (AccountStatus::Checking, 0)
+        (CodexRuntimeAuthStatus::Checking, 0)
     );
 }
 
@@ -150,12 +153,16 @@ fn failed_completion_before_attempt_install_skips_temporary_state_and_rereads() 
 
     assert_eq!(
         (login.join().unwrap(), service.status(), tasks.len()),
-        (AccountStatus::Checking, AccountStatus::Checking, 1)
+        (
+            CodexRuntimeAuthStatus::Checking,
+            CodexRuntimeAuthStatus::Checking,
+            1
+        )
     );
     let refresh = thread::spawn(tasks.take_next());
     next_request(&request_receiver).respond(signed_out_response());
     refresh.join().unwrap();
-    assert_eq!(service.status(), AccountStatus::SignedOut);
+    assert_eq!(service.status(), CodexRuntimeAuthStatus::SignedOut);
     assert!(
         !serde_json::to_string(&service.status())
             .unwrap()
@@ -176,7 +183,10 @@ fn empty_oversized_and_duplicate_early_ids_do_not_exhaust_the_window() {
         completion_ids,
     );
 
-    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::Checking
+    );
     assert_eq!(
         (tasks.len(), connection.requests()),
         (1, vec![browser_start_request()])
@@ -202,7 +212,10 @@ fn unique_early_ids_evict_the_oldest_and_keep_the_latest_completion() {
         completion_ids,
     );
 
-    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::Checking
+    );
     assert_eq!(
         (tasks.len(), connection.requests()),
         (1, vec![browser_start_request()])
@@ -219,7 +232,10 @@ fn unique_early_id_capacity_evicts_the_oldest_completion() {
     let (service, connection, _opener, tasks) =
         early_completion_harness(vec![browser_response("oldest-login")], completion_ids);
 
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
     assert_eq!(
         (tasks.len(), connection.requests()),
         (0, vec![browser_start_request()])
@@ -236,7 +252,10 @@ fn duplicate_early_id_refreshes_fifo_position_without_consuming_capacity() {
         vec![browser_response(anchor_id), signed_in_response()],
         completion_ids,
     );
-    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::Checking
+    );
     assert_eq!(tasks.len(), 1);
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
@@ -251,7 +270,10 @@ fn duplicate_early_id_refreshes_fifo_position_without_consuming_capacity() {
         vec![browser_response(duplicate_id), signed_in_response()],
         completion_ids,
     );
-    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::Checking
+    );
     assert_eq!(tasks.len(), 1);
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
@@ -265,7 +287,10 @@ fn aggregate_early_id_bytes_are_capped_at_the_configured_limit() {
         vec![browser_response(&matching_id), signed_in_response()],
         vec![matching_id.clone(), exact_filler],
     );
-    assert_eq!(service.start_browser_login(), AccountStatus::Checking);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::Checking
+    );
     assert_eq!(tasks.len(), 1);
     tasks.run_next();
     assert_eq!(service.status(), signed_in_status());
@@ -275,7 +300,10 @@ fn aggregate_early_id_bytes_are_capped_at_the_configured_limit() {
         vec![browser_response(&matching_id)],
         vec![matching_id, overflow_filler],
     );
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
     assert_eq!(
         (tasks.len(), connection.requests()),
         (0, vec![browser_start_request()])
@@ -296,7 +324,10 @@ fn matching_success_and_failure_completions_clear_temporary_values_then_refresh(
             browser_response("matching-login"),
             signed_in_response(),
         ]);
-        assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+        assert_eq!(
+            service.start_browser_login(),
+            CodexRuntimeAuthStatus::BrowserPending
+        );
 
         let params = if success {
             json!({ "loginId": "matching-login", "success": true })
@@ -310,7 +341,11 @@ fn matching_success_and_failure_completions_clear_temporary_values_then_refresh(
         notify(&service, "account/login/completed", params);
         assert_eq!(
             (service.status(), tasks.len(), connection.requests()),
-            (AccountStatus::Checking, 1, vec![browser_start_request()],)
+            (
+                CodexRuntimeAuthStatus::Checking,
+                1,
+                vec![browser_start_request()],
+            )
         );
 
         tasks.run_next();
@@ -332,7 +367,10 @@ fn matching_success_and_failure_completions_clear_temporary_values_then_refresh(
 #[test]
 fn stale_and_malformed_completion_notifications_are_ignored() {
     let (service, connection, tasks) = harness(vec![browser_response("current-login")]);
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
 
     for params in [
         json!({ "loginId": "stale-login", "success": true, "error": null }),
@@ -354,7 +392,7 @@ fn stale_and_malformed_completion_notifications_are_ignored() {
     assert_eq!(
         (service.status(), tasks.len(), connection.requests()),
         (
-            AccountStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending,
             0,
             vec![browser_start_request()],
         )
@@ -372,7 +410,11 @@ fn duplicate_notifications_before_task_start_coalesce_into_one_read() {
     tasks.run_next();
     assert_eq!(
         (service.status(), tasks.len(), connection.requests()),
-        (AccountStatus::SignedOut, 0, vec![account_read_request()],)
+        (
+            CodexRuntimeAuthStatus::SignedOut,
+            0,
+            vec![account_read_request()],
+        )
     );
 }
 
@@ -398,7 +440,7 @@ fn notifications_during_a_read_schedule_exactly_one_follow_up() {
     first_task.join().unwrap();
     assert_eq!(
         (service.status(), tasks.len()),
-        (AccountStatus::SignedOut, 1)
+        (CodexRuntimeAuthStatus::SignedOut, 1)
     );
 
     let second_task = thread::spawn(tasks.take_next());
@@ -418,7 +460,7 @@ fn reconnect_invalidates_queued_and_running_refreshes_from_old_connections() {
     let current_connection = Arc::new(FakeConnection::new(vec![signed_out_response()]));
     assert_eq!(
         service.connect(current_connection.clone()),
-        AccountStatus::Checking
+        CodexRuntimeAuthStatus::Checking
     );
     tasks.run_next();
     assert_eq!(
@@ -427,14 +469,17 @@ fn reconnect_invalidates_queued_and_running_refreshes_from_old_connections() {
             old_connection.requests(),
             current_connection.requests(),
         ),
-        (AccountStatus::Checking, vec![], vec![])
+        (CodexRuntimeAuthStatus::Checking, vec![], vec![])
     );
 
     notify(&service, "account/updated", json!({}));
     tasks.run_next();
     assert_eq!(
         (service.status(), current_connection.requests()),
-        (AccountStatus::SignedOut, vec![account_read_request()])
+        (
+            CodexRuntimeAuthStatus::SignedOut,
+            vec![account_read_request()]
+        )
     );
 
     let (request_sender, request_receiver) = mpsc::channel();
@@ -452,12 +497,15 @@ fn reconnect_invalidates_queued_and_running_refreshes_from_old_connections() {
     old_task.join().unwrap();
     assert_eq!(
         (service.status(), tasks.len(), newest_connection.requests()),
-        (AccountStatus::Checking, 1, vec![])
+        (CodexRuntimeAuthStatus::Checking, 1, vec![])
     );
     tasks.run_next();
     assert_eq!(
         (service.status(), newest_connection.requests()),
-        (AccountStatus::SignedOut, vec![account_read_request()])
+        (
+            CodexRuntimeAuthStatus::SignedOut,
+            vec![account_read_request()]
+        )
     );
 }
 
@@ -473,7 +521,10 @@ fn a_failed_task_spawn_does_not_block_the_next_notification() {
     tasks.run_next();
     assert_eq!(
         (service.status(), connection.requests()),
-        (AccountStatus::SignedOut, vec![account_read_request()])
+        (
+            CodexRuntimeAuthStatus::SignedOut,
+            vec![account_read_request()]
+        )
     );
 }
 
@@ -490,7 +541,10 @@ fn completion_during_failed_cancel_wins_over_the_stale_action_error() {
     let login_service = service.clone();
     let login = thread::spawn(move || login_service.start_browser_login());
     next_request(&request_receiver).respond(browser_response("complete-during-cancel"));
-    assert_eq!(login.join().unwrap(), AccountStatus::BrowserPending);
+    assert_eq!(
+        login.join().unwrap(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
 
     let cancel_service = service.clone();
     let cancel = thread::spawn(move || cancel_service.cancel_account_login());
@@ -515,12 +569,16 @@ fn completion_during_failed_cancel_wins_over_the_stale_action_error() {
 
     assert_eq!(
         (cancel.join().unwrap(), service.status(), tasks.len()),
-        (AccountStatus::Checking, AccountStatus::Checking, 1)
+        (
+            CodexRuntimeAuthStatus::Checking,
+            CodexRuntimeAuthStatus::Checking,
+            1
+        )
     );
     let refresh = thread::spawn(tasks.take_next());
     next_request(&request_receiver).respond(signed_out_response());
     refresh.join().unwrap();
-    assert_eq!(service.status(), AccountStatus::SignedOut);
+    assert_eq!(service.status(), CodexRuntimeAuthStatus::SignedOut);
 }
 
 fn harness(
@@ -758,8 +816,8 @@ fn signed_out_response() -> Result<Value, ConnectionError> {
     Ok(json!({ "account": null, "requiresOpenaiAuth": true }))
 }
 
-fn signed_in_status() -> AccountStatus {
-    AccountStatus::SignedIn {
+fn signed_in_status() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::SignedIn {
         email: None,
         plan_type: "plus".to_string(),
     }

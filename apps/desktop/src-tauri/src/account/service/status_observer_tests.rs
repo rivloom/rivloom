@@ -9,7 +9,7 @@ use super::account_actions_tests::signed_out_response;
 use super::retryable_account_error;
 use super::tests::FakeConnection;
 use super::tests::FakeUrlOpener;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 
 #[test]
 fn connection_refresh_and_disconnect_publish_deduplicated_normalized_statuses() {
@@ -29,8 +29,8 @@ fn connection_refresh_and_disconnect_publish_deduplicated_normalized_statuses() 
     assert_eq!(
         observer.statuses(),
         vec![
-            AccountStatus::Checking,
-            AccountStatus::SignedOut,
+            CodexRuntimeAuthStatus::Checking,
+            CodexRuntimeAuthStatus::SignedOut,
             retryable_account_error(),
         ]
     );
@@ -38,17 +38,17 @@ fn connection_refresh_and_disconnect_publish_deduplicated_normalized_statuses() 
 
 #[derive(Default)]
 struct RecordingAccountStatusObserver {
-    statuses: Mutex<Vec<AccountStatus>>,
+    statuses: Mutex<Vec<CodexRuntimeAuthStatus>>,
 }
 
 impl RecordingAccountStatusObserver {
-    fn statuses(&self) -> Vec<AccountStatus> {
+    fn statuses(&self) -> Vec<CodexRuntimeAuthStatus> {
         self.statuses.lock().unwrap().clone()
     }
 }
 
 impl AccountStatusObserver for RecordingAccountStatusObserver {
-    fn on_status(&self, status: &AccountStatus) {
+    fn on_status(&self, status: &CodexRuntimeAuthStatus) {
         self.statuses.lock().unwrap().push(status.clone());
     }
 }

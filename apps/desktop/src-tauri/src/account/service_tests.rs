@@ -14,7 +14,7 @@ use tauri::Url;
 
 use super::AccountService;
 use crate::account::login::UrlOpener;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
 use crate::app_server::ConnectionIdentity;
@@ -55,10 +55,10 @@ fn account_read_maps_supported_and_unsupported_configurations() {
             .map(|_| harness.service.refresh())
             .collect::<Vec<_>>(),
         vec![
-            AccountStatus::SignedOut,
+            CodexRuntimeAuthStatus::SignedOut,
             unsupported_account_error(),
             signed_in_status(),
-            AccountStatus::SignedIn {
+            CodexRuntimeAuthStatus::SignedIn {
                 email: Some("user@example.com".to_string()),
                 plan_type: "pro".to_string(),
             },
@@ -77,7 +77,7 @@ fn account_read_maps_supported_and_unsupported_configurations() {
 fn a_service_without_a_connection_has_explicit_safe_states() {
     let service = AccountService::new();
 
-    assert_eq!(service.status(), AccountStatus::Checking);
+    assert_eq!(service.status(), CodexRuntimeAuthStatus::Checking);
     assert_eq!(service.refresh(), retryable_account_error());
     assert_eq!(service.status(), retryable_account_error());
 }
@@ -116,8 +116,11 @@ fn disconnect_clears_state_and_reconnect_starts_from_checking() {
         "account": null,
         "requiresOpenaiAuth": true,
     }))]));
-    assert_eq!(service.connect(second_connection), AccountStatus::Checking);
-    assert_eq!(service.refresh(), AccountStatus::SignedOut);
+    assert_eq!(
+        service.connect(second_connection),
+        CodexRuntimeAuthStatus::Checking
+    );
+    assert_eq!(service.refresh(), CodexRuntimeAuthStatus::SignedOut);
 }
 
 #[test]
@@ -167,12 +170,12 @@ fn a_late_read_from_an_old_connection_cannot_overwrite_reconnected_state() {
         }
     };
     reconnect.join().unwrap();
-    assert_eq!(reconnect_status, AccountStatus::Checking);
-    assert_eq!(service.refresh(), AccountStatus::SignedOut);
+    assert_eq!(reconnect_status, CodexRuntimeAuthStatus::Checking);
+    assert_eq!(service.refresh(), CodexRuntimeAuthStatus::SignedOut);
     response_sender.send(signed_in_response()).unwrap();
 
-    assert_eq!(old_read.join().unwrap(), AccountStatus::SignedOut);
-    assert_eq!(service.status(), AccountStatus::SignedOut);
+    assert_eq!(old_read.join().unwrap(), CodexRuntimeAuthStatus::SignedOut);
+    assert_eq!(service.status(), CodexRuntimeAuthStatus::SignedOut);
 }
 
 #[test]
@@ -211,14 +214,20 @@ fn an_older_read_on_the_same_connection_cannot_overwrite_a_newer_result() {
             "requiresOpenaiAuth": true,
         })))
         .unwrap();
-    assert_eq!(second_read.join().unwrap(), AccountStatus::SignedOut);
+    assert_eq!(
+        second_read.join().unwrap(),
+        CodexRuntimeAuthStatus::SignedOut
+    );
 
     first_request
         .response_sender
         .send(signed_in_response())
         .unwrap();
-    assert_eq!(first_read.join().unwrap(), AccountStatus::SignedOut);
-    assert_eq!(service.status(), AccountStatus::SignedOut);
+    assert_eq!(
+        first_read.join().unwrap(),
+        CodexRuntimeAuthStatus::SignedOut
+    );
+    assert_eq!(service.status(), CodexRuntimeAuthStatus::SignedOut);
 }
 
 #[test]
@@ -234,7 +243,7 @@ fn a_read_started_before_browser_login_cannot_overwrite_pending() {
     );
     assert_eq!(
         login.wait("browser login should finish"),
-        AccountStatus::BrowserPending
+        CodexRuntimeAuthStatus::BrowserPending
     );
     read_request.respond(
         request("account/read", json!({ "refreshToken": false })),
@@ -245,7 +254,10 @@ fn a_read_started_before_browser_login_cannot_overwrite_pending() {
     );
     assert_eq!(
         (read.wait("account/read should finish"), service.status()),
-        (AccountStatus::BrowserPending, AccountStatus::BrowserPending)
+        (
+            CodexRuntimeAuthStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending
+        )
     );
 }
 
@@ -262,10 +274,16 @@ fn a_read_started_after_browser_login_cannot_overwrite_pending() {
         vec![],
     );
 
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
     assert_eq!(
         (service.refresh(), service.status()),
-        (AccountStatus::BrowserPending, AccountStatus::BrowserPending)
+        (
+            CodexRuntimeAuthStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending
+        )
     );
 }
 
@@ -288,7 +306,7 @@ fn browser_login_holds_the_serialization_gate_until_the_attempt_is_installed() {
             opener.opened_urls()
         ),
         (
-            AccountStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending,
             vec!["https://auth.openai.com/oauth".to_string()],
         )
     );
@@ -303,7 +321,7 @@ fn a_valid_login_on_an_old_connection_is_canceled_without_opening() {
         "account": null,
         "requiresOpenaiAuth": true,
     }))])));
-    assert_eq!(service.refresh(), AccountStatus::SignedOut);
+    assert_eq!(service.refresh(), CodexRuntimeAuthStatus::SignedOut);
     old_request.respond(
         browser_start_request(),
         browser_login_response("old-login", "https://auth.openai.com/old"),
@@ -319,8 +337,8 @@ fn a_valid_login_on_an_old_connection_is_canceled_without_opening() {
             opener.opened_urls()
         ),
         (
-            AccountStatus::SignedOut,
-            AccountStatus::SignedOut,
+            CodexRuntimeAuthStatus::SignedOut,
+            CodexRuntimeAuthStatus::SignedOut,
             Vec::<String>::new()
         )
     );
@@ -354,9 +372,9 @@ fn browser_open_holds_the_connection_transition_gate_until_it_finishes() {
     assert_eq!(
         (login_status, reconnect_status, service.status()),
         (
-            AccountStatus::BrowserPending,
-            AccountStatus::Checking,
-            AccountStatus::Checking
+            CodexRuntimeAuthStatus::BrowserPending,
+            CodexRuntimeAuthStatus::Checking,
+            CodexRuntimeAuthStatus::Checking
         )
     );
 }
@@ -374,7 +392,10 @@ fn failed_browser_cleanup_retains_the_attempt_for_the_next_retry() {
     );
 
     assert_eq!(service.start_browser_login(), browser_open_error());
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
     assert_eq!(
         connection.requests(),
         vec![
@@ -455,7 +476,10 @@ fn unexpected_device_responses_are_canceled_and_retained_until_cleanup() {
 
     assert_eq!(service.start_browser_login(), login_unavailable_error());
     assert_eq!(service.start_browser_login(), login_unavailable_error());
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
     assert_eq!(
         (
             connection.requests(),
@@ -478,7 +502,7 @@ fn unexpected_device_responses_are_canceled_and_retained_until_cleanup() {
                 browser_start_request(),
             ],
             vec!["https://auth.openai.com/oauth".to_string()],
-            AccountStatus::BrowserPending,
+            CodexRuntimeAuthStatus::BrowserPending,
         )
     );
 }
@@ -504,7 +528,7 @@ fn spawn_browser_login(service: &AccountService) -> StatusTask {
 }
 
 pub(super) fn spawn_status_task(
-    operation: impl FnOnce() -> AccountStatus + Send + 'static,
+    operation: impl FnOnce() -> CodexRuntimeAuthStatus + Send + 'static,
 ) -> StatusTask {
     let (result_sender, result_receiver) = mpsc::channel();
     let thread = thread::spawn(move || {
@@ -526,12 +550,12 @@ pub(super) fn next_request(
 }
 
 pub(super) struct StatusTask {
-    result_receiver: mpsc::Receiver<AccountStatus>,
+    result_receiver: mpsc::Receiver<CodexRuntimeAuthStatus>,
     thread: thread::JoinHandle<()>,
 }
 
 impl StatusTask {
-    pub(super) fn wait(self, message: &str) -> AccountStatus {
+    pub(super) fn wait(self, message: &str) -> CodexRuntimeAuthStatus {
         let status = self
             .result_receiver
             .recv_timeout(Duration::from_secs(/*secs*/ 1))
@@ -793,36 +817,36 @@ pub(super) fn browser_start_request() -> RecordedRequest {
     )
 }
 
-fn signed_in_status() -> AccountStatus {
-    AccountStatus::SignedIn {
+fn signed_in_status() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::SignedIn {
         email: None,
         plan_type: "plus".to_string(),
     }
 }
 
-fn retryable_account_error() -> AccountStatus {
-    AccountStatus::Error {
+fn retryable_account_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: "账号状态暂时不可用。".to_string(),
         retryable: true,
     }
 }
 
-fn unsupported_account_error() -> AccountStatus {
-    AccountStatus::Error {
+fn unsupported_account_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: "当前核心服务配置不支持 ChatGPT 账号登录。".to_string(),
         retryable: false,
     }
 }
 
-pub(super) fn browser_open_error() -> AccountStatus {
-    AccountStatus::Error {
+pub(super) fn browser_open_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: "无法打开 ChatGPT 登录页面，请重试。".to_string(),
         retryable: true,
     }
 }
 
-pub(super) fn login_unavailable_error() -> AccountStatus {
-    AccountStatus::Error {
+pub(super) fn login_unavailable_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: "ChatGPT 登录暂时不可用，请重试。".to_string(),
         retryable: true,
     }

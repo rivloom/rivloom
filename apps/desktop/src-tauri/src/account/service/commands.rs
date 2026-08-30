@@ -2,7 +2,7 @@ use std::sync::PoisonError;
 
 use super::AccountService;
 use super::retryable_account_error;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AccountCommand {
@@ -13,7 +13,7 @@ pub(crate) enum AccountCommand {
 }
 
 impl AccountService {
-    pub(crate) fn execute_command(&self, command: AccountCommand) -> AccountStatus {
+    pub(crate) fn execute_command(&self, command: AccountCommand) -> CodexRuntimeAuthStatus {
         let connected = self
             .inner
             .state

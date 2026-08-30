@@ -6,4 +6,4 @@ mod types;
 pub(crate) use service::AccountCommand;
 pub(crate) use service::AccountService;
 pub(crate) use state::AccountState;
-pub(crate) use types::AccountStatus;
+pub(crate) use types::CodexRuntimeAuthStatus;

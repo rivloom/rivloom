@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::retryable_account_error;
 use super::unsupported_account_error;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,14 +27,14 @@ enum AccountPayload {
     Unsupported,
 }
 
-pub(super) fn parse_account_status(result: Value) -> AccountStatus {
+pub(super) fn parse_account_status(result: Value) -> CodexRuntimeAuthStatus {
     let Ok(response) = serde_json::from_value::<AccountReadResponse>(result) else {
         return retryable_account_error();
     };
 
     if response.account.is_null() {
         return if response.requires_openai_auth {
-            AccountStatus::SignedOut
+            CodexRuntimeAuthStatus::SignedOut
         } else {
             unsupported_account_error()
         };
@@ -50,7 +50,7 @@ pub(super) fn parse_account_status(result: Value) -> AccountStatus {
                 Value::String(email) => Some(email),
                 _ => return retryable_account_error(),
             };
-            AccountStatus::SignedIn { email, plan_type }
+            CodexRuntimeAuthStatus::SignedIn { email, plan_type }
         }
         AccountPayload::Unsupported => unsupported_account_error(),
     }

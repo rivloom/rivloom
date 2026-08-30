@@ -6,7 +6,7 @@ use serde::Serialize;
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
-pub(crate) enum AccountStatus {
+pub(crate) enum CodexRuntimeAuthStatus {
     Checking,
     SignedOut,
     BrowserPending,

@@ -1,4 +1,4 @@
-export type AccountStatus =
+export type CodexRuntimeAuthStatus =
   | { state: "checking" }
   | { state: "signedOut" }
   | { state: "browserPending" }

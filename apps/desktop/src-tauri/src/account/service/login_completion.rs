@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::AccountService;
 use super::LoginAttempt;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionIdentity;
 use crate::app_server::NotificationObserver;
@@ -168,7 +168,7 @@ impl AccountService {
         &self,
         connection_revision: u64,
         attempt: LoginAttempt,
-        status: AccountStatus,
+        status: CodexRuntimeAuthStatus,
     ) -> StartedAttemptDisposition {
         let disposition = {
             let mut state = self
@@ -187,7 +187,7 @@ impl AccountService {
             {
                 state.login_attempt = None;
                 state.refresh_revision = state.refresh_revision.wrapping_add(1);
-                state.status = AccountStatus::Checking;
+                state.status = CodexRuntimeAuthStatus::Checking;
                 StartedAttemptDisposition::Completed
             } else {
                 state.login_attempt = Some(attempt);
@@ -206,7 +206,7 @@ impl AccountService {
         &self,
         connection_revision: u64,
         attempt: LoginAttempt,
-        status: AccountStatus,
+        status: CodexRuntimeAuthStatus,
     ) -> bool {
         let mut state = self
             .inner
@@ -227,8 +227,8 @@ impl AccountService {
         connection: &Arc<dyn ConnectionControl>,
         connection_revision: u64,
         attempt: LoginAttempt,
-        status: AccountStatus,
-    ) -> AccountStatus {
+        status: CodexRuntimeAuthStatus,
+    ) -> CodexRuntimeAuthStatus {
         if self.cancel_login(connection, &attempt.login_id).is_ok() {
             self.clear_attempt(&attempt.login_id);
             return self.set_status_for_connection(connection_revision, status);
@@ -252,7 +252,7 @@ impl AccountService {
         {
             state.login_attempt = None;
             state.refresh_revision = state.refresh_revision.wrapping_add(1);
-            state.status = AccountStatus::Checking;
+            state.status = CodexRuntimeAuthStatus::Checking;
         }
     }
 
@@ -287,7 +287,7 @@ impl AccountService {
             {
                 state.login_attempt = None;
                 state.refresh_revision = state.refresh_revision.wrapping_add(1);
-                state.status = AccountStatus::Checking;
+                state.status = CodexRuntimeAuthStatus::Checking;
                 Some(state.connection_revision)
             } else {
                 let connection_revision = state.connection_revision;

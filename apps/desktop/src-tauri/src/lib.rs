@@ -1,11 +1,12 @@
 mod account;
 mod app_server;
+mod identity;
 mod project;
 pub mod runtime_status;
 
 use account::AccountCommand;
 use account::AccountState;
-use account::AccountStatus;
+use account::CodexRuntimeAuthStatus;
 use app_server::state::AppServerState;
 use project::ProjectState;
 use project::commands::{ProjectConnectionState, ProjectDialogState};
@@ -36,29 +37,29 @@ async fn retry_app_server<R: Runtime>(app_handle: AppHandle<R>) -> RuntimeStatus
 }
 
 #[tauri::command]
-async fn get_account_status<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
+async fn get_account_status<R: Runtime>(app_handle: AppHandle<R>) -> CodexRuntimeAuthStatus {
     run_account_command(app_handle, AccountCommand::GetStatus).await
 }
 
 #[tauri::command]
-async fn start_chatgpt_login<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
+async fn start_chatgpt_login<R: Runtime>(app_handle: AppHandle<R>) -> CodexRuntimeAuthStatus {
     run_account_command(app_handle, AccountCommand::StartChatgptLogin).await
 }
 
 #[tauri::command]
-async fn cancel_account_login<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
+async fn cancel_account_login<R: Runtime>(app_handle: AppHandle<R>) -> CodexRuntimeAuthStatus {
     run_account_command(app_handle, AccountCommand::CancelLogin).await
 }
 
 #[tauri::command]
-async fn logout_account<R: Runtime>(app_handle: AppHandle<R>) -> AccountStatus {
+async fn logout_account<R: Runtime>(app_handle: AppHandle<R>) -> CodexRuntimeAuthStatus {
     run_account_command(app_handle, AccountCommand::Logout).await
 }
 
 async fn run_account_command<R: Runtime>(
     app_handle: AppHandle<R>,
     command: AccountCommand,
-) -> AccountStatus {
+) -> CodexRuntimeAuthStatus {
     tauri::async_runtime::spawn_blocking(move || {
         app_handle
             .try_state::<AccountState>()
@@ -76,8 +77,8 @@ fn command_error_status() -> RuntimeStatus {
     }
 }
 
-fn account_command_error_status() -> AccountStatus {
-    AccountStatus::Error {
+fn account_command_error_status() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: ACCOUNT_COMMAND_ERROR_MESSAGE.to_string(),
         retryable: true,
     }
