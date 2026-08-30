@@ -67,6 +67,17 @@ fn one_local_codex_run_uses_an_isolated_thread_and_persists_a_verifiable_receipt
     assert_eq!(completion.cleanup, WorktreeCleanup::Removed);
     assert!(!fixture.repository.join("generated.txt").exists());
     let requests = fixture.connection.requests();
+    let thread_cwd = requests[0].1["cwd"].as_str().unwrap();
+    assert_eq!(
+        requests[0],
+        (
+            "thread/start".to_string(),
+            json!({
+                "cwd": thread_cwd,
+                "config": {"skills.include_instructions": false},
+            }),
+        )
+    );
     assert_eq!(
         requests
             .iter()
@@ -75,6 +86,7 @@ fn one_local_codex_run_uses_an_isolated_thread_and_persists_a_verifiable_receipt
         vec!["thread/start", "turn/start"]
     );
     let run_cwd = requests[1].1["cwd"].as_str().unwrap();
+    assert_eq!(thread_cwd, run_cwd);
     assert_ne!(run_cwd, fixture.project.cwd());
     assert!(!PathBuf::from(run_cwd).exists());
     let stored = fs::read_to_string(&fixture.task_file).unwrap();

@@ -58,6 +58,13 @@ fn start_uses_only_the_isolated_worktree_and_keeps_an_early_started_event() {
                 "clientUserMessageId": "run-1",
                 "input": [{"type": "text", "text": "Implement the bounded task"}],
                 "cwd": worktree.cwd(),
+                "approvalPolicy": "on-request",
+                "approvalsReviewer": "auto_review",
+                "sandboxPolicy": {
+                    "type": "workspaceWrite",
+                    "writableRoots": [worktree.cwd()],
+                    "networkAccess": false,
+                },
             }),
         )]
     );

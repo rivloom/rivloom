@@ -2,8 +2,10 @@
 
 - 日期：2026-08-30
 - 平台：Windows
-- 验证提交：`1c531ca9eb`
-- 状态：R1、R2 实现、自动化验证、原生进程 smoke 与 stacked PR 发布完成；真实 Run 和视觉 smoke 待完成
+- 实现基线：`1c531ca9eb`
+- Gate 分支：`codex/r2-gate-docs`
+- 状态：R1/R2 实现与自动化验证完成；原生宽/窄窗口视觉 Gate 通过；真实 Codex
+  success/cancel Gate 被上游 App Server 审批线程崩溃阻塞
 
 ## 1. 结论
 
@@ -12,23 +14,30 @@ Host：Rivloom Identity 与 Codex Runtime Auth 分离；用户可以从已登记
 在受管 worktree 中启动、观察和停止一次 Codex Run，并得到可校验 RunReceipt 与 Patch
 元数据。主流程不依赖完整 Chat 页面，也没有嵌入或修改 `codex-rs`。
 
-自动化 Gate 与不调用模型的原生进程 smoke 已通过，20 个相邻 base/head 的 stacked PR
-也已发布。不过还不能把 R2 写成“完成人工验收”：真实已登录 Codex 的 Run smoke 没有在
-无人值守状态下调用。它会使用真实账号和模型，并可能等待本机审批，应由用户知情参与一次。
+自动化 Gate、原生进程生命周期 smoke 和 Windows 原生 WebView 宽/窄窗口检查均已通过。
+真实已登录 Codex 的 Run 也已经使用专用测试仓库启动，但目前不能把 R2 的运行验收写成
+“全部通过”：在 `approvalPolicy=on-request`、`approvalsReviewer=auto_review` 下，上游
+App Server 的 `codex-approval-review` 线程在 Windows 上稳定栈溢出。即使模型只调用安全的
+`Get-Content -LiteralPath gate.txt`，App Server 仍会崩溃并断开。
+
+Rivloom 对该故障按设计 fail closed：Run 进入 `outcomeUnknown`，不会伪报成功或自动重跑；
+专用仓库的 checkout、HEAD 和基线文件均未改变。是否临时改用另一种审批策略属于安全与
+产品语义决策，本 Gate 没有静默替用户改变。
 
 ## 2. 里程碑完成度
 
-| 范围                             | 本地实现 | 自动化验证 | 发布状态                                                                        |
-| -------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------- |
-| R1.1 身份与 Runtime Auth 契约    | 完成     | 通过       | [PR #41](https://github.com/rivloom/rivloom/pull/41)                             |
-| R1.2 本地身份存储                | 完成     | 通过       | [PR #42](https://github.com/rivloom/rivloom/pull/42)                             |
-| R1.3 双状态首页                  | 完成     | 通过       | [PR #44](https://github.com/rivloom/rivloom/pull/44)                             |
-| R2.1 Task/Run 状态机             | 完成     | 通过       | [PR #45](https://github.com/rivloom/rivloom/pull/45)                             |
-| R2.2 版本化 Task Store           | 完成     | 通过       | [PR #46](https://github.com/rivloom/rivloom/pull/46)                             |
-| R2.3 Codex Run 事件路由          | 完成     | 通过       | [PR #47](https://github.com/rivloom/rivloom/pull/47)、[#48](https://github.com/rivloom/rivloom/pull/48) |
-| R2.4 worktree 与 Patch Artifact  | 完成     | 通过       | [PR #49](https://github.com/rivloom/rivloom/pull/49)、[#50](https://github.com/rivloom/rivloom/pull/50) |
-| R2.5 RunReceipt、编排、命令与 UI | 完成     | 通过       | [PR #51](https://github.com/rivloom/rivloom/pull/51) 到 [#64](https://github.com/rivloom/rivloom/pull/64) |
-| R2 Gate 与验证记录               | 完成     | 通过       | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
+| 范围                             | 本地实现 | 验证状态             | 发布状态                                                                        |
+| -------------------------------- | -------- | -------------------- | ------------------------------------------------------------------------------- |
+| R1.1 身份与 Runtime Auth 契约    | 完成     | 通过                 | [PR #41](https://github.com/rivloom/rivloom/pull/41)                             |
+| R1.2 本地身份存储                | 完成     | 通过                 | [PR #42](https://github.com/rivloom/rivloom/pull/42)                             |
+| R1.3 双状态首页                  | 完成     | 通过                 | [PR #44](https://github.com/rivloom/rivloom/pull/44)                             |
+| R2.1 Task/Run 状态机             | 完成     | 通过                 | [PR #45](https://github.com/rivloom/rivloom/pull/45)                             |
+| R2.2 版本化 Task Store           | 完成     | 通过                 | [PR #46](https://github.com/rivloom/rivloom/pull/46)                             |
+| R2.3 Codex Run 事件路由          | 完成     | 通过                 | [PR #47](https://github.com/rivloom/rivloom/pull/47)、[#48](https://github.com/rivloom/rivloom/pull/48) |
+| R2.4 worktree 与 Patch Artifact  | 完成     | 通过                 | [PR #49](https://github.com/rivloom/rivloom/pull/49)、[#50](https://github.com/rivloom/rivloom/pull/50) |
+| R2.5 RunReceipt、编排、命令与 UI | 完成     | 自动化通过           | [PR #51](https://github.com/rivloom/rivloom/pull/51) 到 [#64](https://github.com/rivloom/rivloom/pull/64) |
+| R2 原生视觉 Gate                | 完成     | 通过                 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
+| R2 真实 success/cancel Gate     | 未完成   | 上游 Runtime 缺陷阻塞 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
 
 R3 及之后没有提前开始。当前代码仍是 Codex 专用路径，没有为了 Hermes、Reasonix、
 Claude Code 或未知第三 Runtime 创建万能适配器。
@@ -62,7 +71,7 @@ R2 纵向闭环：
 
 ## 4. 自动化证据
 
-在 `apps/desktop` 对验证提交运行：
+在 `apps/desktop` 对 Gate 分支运行：
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -70,9 +79,8 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib --features test-tauri-comm
 cargo clippy --manifest-path src-tauri/Cargo.toml --tests -- -D warnings
 cargo clippy --manifest-path src-tauri/Cargo.toml --lib --features test-tauri-commands -- -D warnings
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-vitest run
-tsc -b --pretty false
-vite build
+pnpm test
+pnpm run build
 ```
 
 结果：
@@ -83,27 +91,49 @@ vite build
 - Rustfmt：通过。
 - React/Vitest：21 个测试文件、92 项测试通过。
 - TypeScript project build 与 Vite production build：通过。
-- `git diff --check`：通过；Windows checkout 仅有预期的 LF/CRLF 提示。
 
 Rust 测试覆盖真实临时 Git 仓库与 worktree 操作；App Server 使用受控测试连接，不调用
-真实模型。测试构建只创建了 Git 忽略的 sidecar hardlink 和本地构建输出，没有提交二进制。
+真实模型。测试构建只创建 Git 忽略的 sidecar hardlink 和本地构建输出，没有提交二进制。
 
-## 5. Windows 原生进程 smoke
+## 5. Windows 原生 Runtime Gate
 
-使用仓库中已有 sidecar 运行 `tauri dev`，结果如下：
+使用仓库中已有 sidecar 启动 `tauri dev`，并连接隔离 Rivloom `codex-home` 中已登录的真实
+Codex Runtime。真实 turn 明确发送以下执行边界：
 
-- Tauri/Rust 开发构建完成并启动 `rivloom-desktop.exe`。
-- App Server 状态按 `stopped -> starting -> connected` 转换，握手返回 Windows 平台和隔离的
-  Rivloom `codex-home`；没有使用官方 Codex Desktop 的用户数据目录。
-- 当前隔离账号未登录，featured plugin 请求出现 401/429 警告，但没有阻止 Runtime 连接，
-  也没有触发 `thread/start`、`turn/start` 或模型请求。
-- 尝试自动读取原生窗口布局时，Windows 桌面控制授权因用户不在而超时；没有绕过授权，
-  没有点击登录、项目或任务操作。进程随后停止。
+- `approvalPolicy=on-request`；
+- `approvalsReviewer=auto_review`；
+- `sandboxPolicy.type=workspaceWrite`；
+- `writableRoots` 只有当前 Run 的受管 worktree；
+- `networkAccess=false`；
+- Task thread 不注入个人 Skill instructions/catalog。
 
-因此原生构建与 Runtime 生命周期已经 smoke 通过；窄/宽窗口的最终视觉检查和真实 Task
-Run 仍明确保留为人工验收，不能由这次启动结果替代。
+专用测试仓库证据：
 
-## 6. Gate R2 行为证据
+- checkout HEAD 始终为 `24acd311baf599a8f92db9788326df7c12b890bc`；
+- `gate.txt` SHA-256 始终为
+  `E346803ED953CBD930B6E8B5B5489F625A45347CC7301B512D4DFC561C781616`；
+- `git status --porcelain=v1` 为空；
+- 没有残留受管 worktree，也没有提交或覆盖用户 checkout。
+
+真实 Run 已到达模型工具调用。最小只读命令 `Get-Content -LiteralPath gate.txt` 也会使上游
+App Server 的 `codex-approval-review` 线程栈溢出，随后连接中断。Rivloom 将结果持久化为
+`outcomeUnknown`，回执 Patch 为 0 bytes，且不会自动重跑。因此：
+
+- success、Patch 正文与成功 RunReceipt Gate：未通过，被同一上游缺陷阻塞；
+- cancel Gate：未能在 Runtime 保持存活的执行窗口内可靠完成，被同一缺陷阻塞；
+- fail-closed、断连对账、原 checkout 不变：真实进程证据通过。
+
+## 6. Windows 原生视觉 Gate
+
+- 宽窗口 `1182 × 792`：项目任务表单、任务列表、状态时间线、RunReceipt 与 Patch 元数据
+  均可阅读，无横向溢出、重叠或被侧栏遮挡。
+- 窄窗口约 `962 × 672`：这是当前原生窗口允许的约 960px 宽窄布局和最小高度；表单、
+  双栏事件/回执区和长中英文任务标题会正常换行，没有横向滚动条或内容截断。
+- 连接状态、结果未知警示和 0-byte Patch 元数据在原生 WebView 中与 snapshot 语义一致。
+
+视觉 Gate 只验证布局和可读性，不把 `outcomeUnknown` 误算为真实执行成功。
+
+## 7. Gate R2 行为证据
 
 - Task、Run、event、summary、error、测试项和最终 prompt 都有硬上限。
 - `turn/start` 的 `cwd` 只能来自后端已登记项目生成的受管 worktree，WebView 不能传入路径。
@@ -117,27 +147,30 @@ Run 仍明确保留为人工验收，不能由这次启动结果替代。
 - Runtime 未报告测试时显示“未报告”，不把缺失信息猜成通过。
 - Patch 正文按需读取，初始 DOM 和 Task Store 都不包含正文；超限 Patch 只显示元数据。
 
-## 7. 安全与隐私审计
+## 8. 安全与隐私审计
 
+- Task Store v1 实测为 10 个 Task、9 个回执；回执 Patch 只含 `baselineCommit`、`state`、
+  `limitBytes`、`byteCount`、`sha256` 五个字段。
+- Task Store 实测不含 Windows 绝对路径、Token 字段、`CODEX_HOME`/`codex-home` 或 Patch
+  `body`/`content` 字段。
 - Task Store 只持久化不透明 project ID，不保存本机绝对项目路径。
-- Runtime Token、`CODEX_HOME`、完整环境变量和原始 App Server payload 不属于 Task、
-  RunReceipt 或前端 event contract。
+- Runtime Token、完整环境变量和原始 App Server payload 不属于 Task、RunReceipt 或
+  前端 event contract。
 - Rust 命令只暴露固定 task list/start/stop/Patch 读取面，错误映射为封闭枚举。
 - worktree 创建和清理都校验受管根目录；不覆盖用户 checkout，也不递归删除未验证路径。
 - Patch 正文只作为当前进程内的短期 Artifact 提供给本机 UI，不进入 RunReceipt 或 Task Store。
-- 审批仍留在执行 Node；当前 UI 只显示等待状态，不提供远端代批能力。
-- 本次验证没有读取、记录或提交账号 Token、OAuth URL、账号文件或用户工作区内容。
+- 本次验证没有读取、记录或提交账号 Token、OAuth URL 或账号文件内容。
 
-## 8. 尚未完成与下一步
+## 9. 阻塞决策与下一步
 
-1. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；前一项
-   合并后再把下一项 base 改回 `main`，不同时合并多个仍指向中间分支的 PR。
-2. 在用户知情参与时，用已登录的 Codex Runtime 和一个专用测试仓库完成原生 smoke：
-   启动任务、观察状态、按需处理本机审批、停止一次 Run、验证 Patch 与 RunReceipt，并确认
-   用户 checkout 未改变。
-3. 做一次真实 Tauri 窗口的窄/宽布局检查；自动化 snapshot 已覆盖文案和交互，但不替代
-   Windows 原生 WebView 的最终视觉验收。
-4. 上述两项完成且 R1/R2 stack 审查合并后进入 R3.1；不提前开发第二 Runtime、Marketplace
-   或 Skill Directory。
+1. 保持当前 `on-request + auto_review` 策略并等待/升级到修复该 Windows 栈溢出的上游
+   Runtime；或者单独评审改为 `never`，或补齐 `user` reviewer 的本机审批交互。三者会改变
+   安全与无人值守语义，不能作为 Gate 内部修补静默选择。
+2. 上述策略确定且 Runtime 可稳定执行后，在同一专用仓库重跑 success、Patch、RunReceipt、
+   cancel 和 worktree cleanup Gate。
+3. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；
+   前一项合并后再把下一项 base 改回 `main`。
+4. Runtime Gate 补齐且 R1/R2 stack 审查合并后进入 R3.1；不提前开发第二 Runtime、
+   Marketplace 或 Skill Directory。
 
 CI 继续保持暂停；本记录不以缺少 CI 失败邮件代替任何本地测试证据。

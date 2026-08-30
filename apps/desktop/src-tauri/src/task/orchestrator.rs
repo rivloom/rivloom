@@ -345,7 +345,13 @@ fn start_thread(
     connection: Arc<dyn ConnectionControl>,
 ) -> Result<String, ThreadStartError> {
     let response = connection
-        .request("thread/start", json!({"cwd": worktree.cwd()}))
+        .request(
+            "thread/start",
+            json!({
+                "cwd": worktree.cwd(),
+                "config": {"skills.include_instructions": false},
+            }),
+        )
         .map_err(ThreadStartError::Connection)?;
     let thread = response
         .get("thread")

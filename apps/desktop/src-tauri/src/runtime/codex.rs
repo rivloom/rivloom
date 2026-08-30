@@ -88,6 +88,13 @@ impl CodexRuntime {
                     "clientUserMessageId": request.run_id,
                     "input": [{"type": "text", "text": request.prompt}],
                     "cwd": request.worktree.cwd(),
+                    "approvalPolicy": "on-request",
+                    "approvalsReviewer": "auto_review",
+                    "sandboxPolicy": {
+                        "type": "workspaceWrite",
+                        "writableRoots": [request.worktree.cwd()],
+                        "networkAccess": false,
+                    },
                 }),
             )
             .map_err(map_connection_error)?;
