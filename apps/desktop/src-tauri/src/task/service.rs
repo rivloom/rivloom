@@ -19,6 +19,9 @@ use super::types::TaskSpec;
 use super::types::TaskStatus;
 use super::types::TransitionDetails;
 
+const RESTARTED_RUN_ERROR: &str =
+    "Rivloom restarted before the local run outcome could be verified.";
+
 pub(super) struct CreateTaskRequest {
     pub(super) task_id: String,
     pub(super) idempotency_key: String,
@@ -373,6 +376,44 @@ impl TaskService {
             .ok_or(TaskServiceError::State)?;
         *cache = Some(next);
         Ok(run)
+    }
+
+    pub(super) fn reconcile_incomplete_runs(&self) -> Result<Vec<TaskRecord>, TaskServiceError> {
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
+        let mut next = tasks.clone();
+        let mut reconciled = Vec::new();
+        for task in &mut next {
+            if task.record.status != TaskStatus::Running {
+                continue;
+            }
+            let active_run_ids = task
+                .record
+                .runs
+                .iter()
+                .filter(|run| matches!(run.status, RunStatus::Running | RunStatus::WaitingApproval))
+                .map(|run| run.id.clone())
+                .collect::<Vec<_>>();
+            for run_id in active_run_ids {
+                task.record.transition_run(
+                    &run_id,
+                    RunStatus::OutcomeUnknown,
+                    TransitionDetails::with_error(RESTARTED_RUN_ERROR),
+                )?;
+            }
+            task.record.transition(
+                TaskStatus::OutcomeUnknown,
+                TransitionDetails::with_error(RESTARTED_RUN_ERROR),
+            )?;
+            reconciled.push(task.record.clone());
+        }
+        if reconciled.is_empty() {
+            return Ok(reconciled);
+        }
+        self.store.save(&next)?;
+        *cache = Some(next);
+        Ok(reconciled)
     }
 
     fn ensure_loaded(&self, cache: &mut Option<Vec<StoredTask>>) -> Result<(), TaskServiceError> {

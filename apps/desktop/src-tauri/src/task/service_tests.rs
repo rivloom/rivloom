@@ -4,6 +4,7 @@ use sha2::Sha256;
 
 use super::BeginRunResult;
 use super::CreateTaskRequest;
+use super::RESTARTED_RUN_ERROR;
 use super::RegisterRunRequest;
 use super::TaskService;
 use super::TaskServiceError;
@@ -280,6 +281,41 @@ fn a_different_receipt_never_overwrites_the_first_terminal_result() {
         service.get_task("task-1").unwrap().runs[0].receipt,
         Some(original)
     );
+}
+
+#[test]
+fn restart_reconciliation_marks_active_runs_unknown_once_without_rerunning_them() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("tasks-v1.json");
+    let mut running = running_task();
+    running.runs[0].status = RunStatus::WaitingApproval;
+    TaskStore::new(path.clone())
+        .save(&[StoredTask {
+            idempotency_key: "create-1".to_string(),
+            project_id: Some(project_id()),
+            record: running.clone(),
+            run_keys: vec![],
+        }])
+        .unwrap();
+    let service = TaskService::new(TaskStore::new(path.clone()));
+    let details = TransitionDetails::with_error(RESTARTED_RUN_ERROR);
+    running
+        .transition_run("run-1", RunStatus::OutcomeUnknown, details.clone())
+        .unwrap();
+    running
+        .transition(TaskStatus::OutcomeUnknown, details)
+        .unwrap();
+
+    assert_eq!(
+        service.reconcile_incomplete_runs().unwrap(),
+        vec![running.clone()]
+    );
+    assert_eq!(service.reconcile_incomplete_runs().unwrap(), vec![]);
+    assert_eq!(service.get_task("task-1").unwrap(), running);
+
+    let restarted = TaskService::new(TaskStore::new(path));
+    assert_eq!(restarted.reconcile_incomplete_runs().unwrap(), vec![]);
+    assert_eq!(restarted.get_task("task-1").unwrap().runs[0].receipt, None);
 }
 
 fn create_request(task_id: &str, idempotency_key: &str) -> CreateTaskRequest {
