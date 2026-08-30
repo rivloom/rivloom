@@ -8,8 +8,8 @@ export const zhCN = {
     label: "主要导航",
     overview: "概览",
     stageLabel: "当前阶段",
-    stageTitle: "账号接入",
-    stageDescription: "建立 ChatGPT 登录、恢复和退出的安全桌面流程。",
+    stageTitle: "身份与 Runtime",
+    stageDescription: "分离协作身份与模型执行凭据，建立清晰的本机边界。",
     projectStage: {
       title: "本地项目与会话",
       description: "选择本地目录，安全恢复最近项目与项目会话。",
@@ -17,12 +17,12 @@ export const zhCN = {
   },
   overview: {
     eyebrow: "Rivloom Desktop",
-    title: "先连接本地核心，再安全接入你的 ChatGPT 账号",
+    title: "身份属于 Rivloom，模型执行交给 Codex Runtime",
     description:
-      "Rivloom 正在完成账号接入基础。当前版本不会创建会话、发送模型请求或修改项目文件。",
-    privacyLabel: "凭据留在本地服务",
+      "本机身份用于未来的成员、设备与协作关系；ChatGPT 登录只授权当前 Node 上的 Codex Runtime。",
+    privacyLabel: "两种身份，各守边界",
     privacyDescription:
-      "登录凭据由独立 App Server 保存，界面只接收脱敏账号状态。",
+      "Rivloom 不把 Runtime 凭据当作成员身份，也不会把它发送给未来的 Brain。",
   },
   projectOverview: {
     eyebrow: "Rivloom Local",
@@ -118,9 +118,50 @@ export const zhCN = {
         "A2 只读取这条会话的归一化摘要，不载入历史消息，也不会发送模型请求。",
     },
   },
+  identity: {
+    eyebrow: "01 / Local identity",
+    title: "Rivloom 身份",
+    badge: {
+      loading: "正在读取",
+      error: "暂不可用",
+      local: "仅此设备",
+      brain: "Brain 成员",
+    },
+    loading: {
+      title: "正在读取本机身份…",
+    },
+    local: {
+      description:
+        "这是独立于 Runtime 登录的本机协作身份；加入 Brain 前只在此设备生效。",
+      unjoined: "尚未加入 Brain",
+    },
+    brain: {
+      description: "此身份已建立 Brain 成员关系，可用于后续委派与审查。",
+      joined: "已加入 Brain",
+    },
+    fields: {
+      brain: "Brain 状态",
+      role: "成员角色",
+      deviceId: "设备 ID",
+      identityId: "身份 ID",
+    },
+    roles: {
+      owner: "所有者",
+      member: "成员",
+    },
+    actions: {
+      retry: "重新读取身份",
+    },
+  },
+  runtimeSection: {
+    eyebrow: "02 / Runtime host",
+    title: "Codex Runtime",
+    description:
+      "负责本机模型执行与 ChatGPT 认证；登录状态不会改变 Rivloom 身份或 Brain 权限。",
+  },
   account: {
-    eyebrow: "账号访问",
-    title: "ChatGPT 账号",
+    eyebrow: "Codex Runtime Auth",
+    title: "ChatGPT 登录",
     runtimeUnavailable: {
       label: "等待核心服务",
       title: "核心服务连接后可登录",
@@ -133,7 +174,7 @@ export const zhCN = {
     },
     signedOut: {
       label: "未登录",
-      title: "连接 ChatGPT 账号",
+      title: "为 Codex Runtime 登录 ChatGPT",
       description:
         "通过系统浏览器登录。凭据由本地 App Server 保存，不会进入页面。",
     },
@@ -146,8 +187,9 @@ export const zhCN = {
     },
     signedIn: {
       label: "已登录",
-      title: "ChatGPT 账号已连接",
-      description: "账号凭据由本地 App Server 管理，可随时安全退出。",
+      title: "Codex Runtime 已登录",
+      description:
+        "凭据只供本机 Runtime 调用模型，不代表 Rivloom 成员或 Brain 权限。",
       emailLabel: "账号邮箱",
       emailUnavailable: "未提供邮箱",
       planLabel: "账号方案",

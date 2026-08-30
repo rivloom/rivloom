@@ -70,6 +70,50 @@
   gap: var(--space-6);
 }
 
+.runtimeSection {
+  display: grid;
+  gap: var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-border);
+}
+
+.domainHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.domainHeader > p {
+  margin: 3px 0 0;
+  color: var(--color-accent);
+  font-family: var(--font-code);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.domainHeader h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.domainHeader span {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.runtimeCards {
+  display: grid;
+  gap: var(--space-4);
+}
+
 @media (max-width: 980px) {
   .intro {
     grid-template-columns: 1fr;
@@ -78,5 +122,9 @@
 
   .privacyNote {
     max-width: 520px;
+  }
+
+  .runtimeSection {
+    padding-left: var(--space-3);
   }
 }

@@ -35,6 +35,15 @@ function renderAccount(
 }
 
 describe("AccountAccessCard", () => {
+  it("labels ChatGPT access as Codex Runtime authentication", () => {
+    renderAccount();
+
+    expect(
+      screen.getByRole("heading", { name: "ChatGPT 登录" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Codex Runtime Auth")).toBeInTheDocument();
+  });
+
   it("disables account access until the core runtime is connected", () => {
     renderAccount({
       runtimeConnected: false,

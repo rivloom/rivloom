@@ -6,6 +6,7 @@ import { zhCN } from "../content/zh-CN";
 
 const hookMocks = vi.hoisted(() => ({
   useAccountStatus: vi.fn(),
+  useIdentity: vi.fn(),
   useProjectThreads: vi.fn(),
   useRecentProjects: vi.fn(),
   useRuntimeStatus: vi.fn(),
@@ -13,6 +14,9 @@ const hookMocks = vi.hoisted(() => ({
 
 vi.mock("../hooks/useAccountStatus", () => ({
   useAccountStatus: hookMocks.useAccountStatus,
+}));
+vi.mock("../hooks/useIdentity", () => ({
+  useIdentity: hookMocks.useIdentity,
 }));
 vi.mock("../hooks/useRecentProjects", () => ({
   useRecentProjects: hookMocks.useRecentProjects,
@@ -62,6 +66,22 @@ function account(status: object) {
   };
 }
 
+function identity(brainMembership: object | null = null) {
+  return {
+    pendingAction: null,
+    refresh: vi.fn(),
+    state: {
+      state: "ready",
+      identity: {
+        identityId: "identity-v1-11111111111111111111111111111111",
+        displayName: "本机用户",
+        deviceId: "device-v1-22222222222222222222222222222222",
+        brainMembership,
+      },
+    },
+  };
+}
+
 function projects() {
   return {
     pendingAction: null,
@@ -90,6 +110,7 @@ describe("App", () => {
   beforeEach(() => {
     hookMocks.useRuntimeStatus.mockReset();
     hookMocks.useAccountStatus.mockReset();
+    hookMocks.useIdentity.mockReset();
     hookMocks.useProjectThreads.mockReset();
     hookMocks.useRecentProjects.mockReset();
     hookMocks.useRuntimeStatus.mockReturnValue({
@@ -98,6 +119,7 @@ describe("App", () => {
       status: { state: "starting" },
     });
     hookMocks.useAccountStatus.mockReturnValue(account({ state: "signedOut" }));
+    hookMocks.useIdentity.mockReturnValue(identity());
     hookMocks.useProjectThreads.mockReturnValue(threads());
     hookMocks.useRecentProjects.mockReturnValue(projects());
   });
@@ -120,6 +142,40 @@ describe("App", () => {
     expect(screen.getAllByText("正在启动").length).toBeGreaterThan(0);
     expect(screen.getByText("正在准备本地核心服务…")).toBeInTheDocument();
     expect(screen.getByText("核心服务连接后可登录")).toBeInTheDocument();
+  });
+
+  it("keeps Rivloom identity separate from Codex Runtime auth and Brain state", () => {
+    const { rerender } = render(<App />);
+
+    expect(
+      screen.getByRole("heading", { name: "Rivloom 身份" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Codex Runtime" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("本机用户")).toBeInTheDocument();
+    expect(screen.getByText("尚未加入 Brain")).toBeInTheDocument();
+
+    hookMocks.useRuntimeStatus.mockReturnValue({
+      retry: vi.fn(),
+      retrying: false,
+      status: connectedRuntime,
+    });
+    hookMocks.useAccountStatus.mockReturnValue(
+      account({ state: "signedIn", email: null, planType: "plus" }),
+    );
+    rerender(<App />);
+
+    expect(screen.getByText("Codex Runtime 已登录")).toBeInTheDocument();
+    expect(screen.getByText("尚未加入 Brain")).toBeInTheDocument();
+
+    hookMocks.useIdentity.mockReturnValue(
+      identity({ brainId: "brain-1", memberId: "member-1", role: "owner" }),
+    );
+    rerender(<App />);
+    expect(screen.getByText("已加入 Brain")).toBeInTheDocument();
+    expect(screen.getByText("所有者")).toBeInTheDocument();
+    expect(screen.getByText("Codex Runtime 已登录")).toBeInTheDocument();
   });
 
   it("gates local projects until the runtime and account are ready", () => {

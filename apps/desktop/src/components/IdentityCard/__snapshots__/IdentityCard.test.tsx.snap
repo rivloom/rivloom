@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`IdentityCard > shows a local Rivloom identity without claiming Brain membership > local identity details without Brain 1`] = `
+<dl
+  class="_details_2fb495"
+>
+  <div>
+    <dt>
+      Brain 状态
+    </dt>
+    <dd>
+      尚未加入 Brain
+    </dd>
+  </div>
+  <div>
+    <dt>
+      设备 ID
+    </dt>
+    <dd
+      class="_code_2fb495"
+    >
+      device-v1-22222222222222222222222222222222
+    </dd>
+  </div>
+  <div>
+    <dt>
+      身份 ID
+    </dt>
+    <dd
+      class="_code_2fb495"
+    >
+      identity-v1-11111111111111111111111111111111
+    </dd>
+  </div>
+</dl>
+`;

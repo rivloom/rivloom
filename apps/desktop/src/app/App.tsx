@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 
 import { AccountAccessCard } from "../components/AccountAccessCard/AccountAccessCard";
 import { AppShell } from "../components/AppShell/AppShell";
+import { IdentityCard } from "../components/IdentityCard/IdentityCard";
 import { ProjectAccessCard } from "../components/ProjectAccessCard/ProjectAccessCard";
 import { ProjectWorkspace } from "../components/ProjectWorkspace/ProjectWorkspace";
 import { ServiceStatusCard } from "../components/ServiceStatusCard/ServiceStatusCard";
 import { zhCN } from "../content/zh-CN";
 import { useAccountStatus } from "../hooks/useAccountStatus";
+import { useIdentity } from "../hooks/useIdentity";
 import { useRecentProjects } from "../hooks/useRecentProjects";
 import { useRuntimeStatus } from "../hooks/useRuntimeStatus";
 import type { LocalProject } from "../types/project";
@@ -15,6 +17,7 @@ import styles from "./App.module.css";
 
 export function App() {
   const { retry, retrying, status: runtimeStatus } = useRuntimeStatus();
+  const identity = useIdentity();
   const runtimeConnected = runtimeStatus.state === "connected";
   const account = useAccountStatus(runtimeConnected);
   const signedIn = account.status.state === "signedIn";
@@ -80,20 +83,41 @@ export function App() {
           </section>
 
           <div className={styles.cards}>
-            <ServiceStatusCard
-              status={runtimeStatus}
-              onRetry={retry}
-              retrying={retrying}
+            <IdentityCard
+              state={identity.state}
+              pendingAction={identity.pendingAction}
+              onRefresh={identity.refresh}
             />
-            <AccountAccessCard
-              runtimeConnected={runtimeConnected}
-              status={account.status}
-              pendingAction={account.pendingAction}
-              onRefresh={account.refresh}
-              onStartChatgptLogin={account.beginChatgptLogin}
-              onCancelLogin={account.cancelLogin}
-              onLogout={account.logout}
-            />
+            <section
+              className={styles.runtimeSection}
+              aria-labelledby="runtime-section-title"
+            >
+              <header className={styles.domainHeader}>
+                <p>{zhCN.runtimeSection.eyebrow}</p>
+                <div>
+                  <h2 id="runtime-section-title">
+                    {zhCN.runtimeSection.title}
+                  </h2>
+                  <span>{zhCN.runtimeSection.description}</span>
+                </div>
+              </header>
+              <div className={styles.runtimeCards}>
+                <ServiceStatusCard
+                  status={runtimeStatus}
+                  onRetry={retry}
+                  retrying={retrying}
+                />
+                <AccountAccessCard
+                  runtimeConnected={runtimeConnected}
+                  status={account.status}
+                  pendingAction={account.pendingAction}
+                  onRefresh={account.refresh}
+                  onStartChatgptLogin={account.beginChatgptLogin}
+                  onCancelLogin={account.cancelLogin}
+                  onLogout={account.logout}
+                />
+              </div>
+            </section>
             {projectAccessReady ? (
               <ProjectAccessCard
                 state={projects.state}
