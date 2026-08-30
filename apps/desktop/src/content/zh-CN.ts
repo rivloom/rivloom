@@ -11,8 +11,8 @@ export const zhCN = {
     stageTitle: "身份与 Runtime",
     stageDescription: "分离协作身份与模型执行凭据，建立清晰的本机边界。",
     projectStage: {
-      title: "本地项目与会话",
-      description: "选择本地目录，安全恢复最近项目与项目会话。",
+      title: "本地项目与任务",
+      description: "选择本地目录，在隔离环境中执行有界任务。",
     },
   },
   overview: {
@@ -31,7 +31,7 @@ export const zhCN = {
       "选择已有目录或重新打开最近项目。这里只登记目录元数据，不扫描文件，也不会自动发送模型请求。",
     privacyLabel: "项目内容保持原位",
     privacyDescription:
-      "Rivloom 只保存有界的路径与会话摘要；打开项目不会创建模型 turn。",
+      "Rivloom 只在本机保存项目映射与有界任务状态；打开项目不会启动模型执行。",
   },
   project: {
     eyebrow: "Local workspace",
@@ -100,7 +100,7 @@ export const zhCN = {
   },
   workspace: {
     label: (name: string) => `项目工作区 ${name}`,
-    eyebrow: "Local project",
+    eyebrow: "Local task host",
     pathLabel: "项目目录",
     actions: {
       back: "返回项目首页",
@@ -109,7 +109,8 @@ export const zhCN = {
     },
     disconnected: {
       title: "核心服务连接中断",
-      description: "项目元数据仍保留在本页；连接恢复后可重新加载会话。",
+      description:
+        "已保存任务仍可查看和起草；连接恢复前不能启动新的 Codex Run。",
     },
     selection: {
       eyebrow: "Selected thread",
@@ -119,6 +120,32 @@ export const zhCN = {
     },
   },
   task: {
+    errors: {
+      invalidTask: "任务内容不符合有界输入要求。",
+      taskUnavailable: "本地任务状态暂不可用。",
+      projectUnavailable: "本地项目不可用或已移动。",
+      identityUnavailable: "Rivloom 本机身份暂不可用。",
+      runtimeUnavailable: "Codex Runtime 尚未就绪。",
+      runUnavailable: "这次运行已不再可停止。",
+      taskCapacityReached: "本机并行运行已达到 32 个上限。",
+    },
+    list: {
+      eyebrow: "Bounded task history",
+      title: "本地任务",
+      description: "只保留有界状态、回执和 Patch 元数据。",
+      count: (count: number) => `${count} 个任务`,
+      loading: {
+        title: "正在读取本地任务…",
+        description: "Rivloom 正在加载这个项目的持久化任务状态。",
+      },
+      error: {
+        title: "任务状态可能不是最新",
+      },
+      empty: {
+        title: "还没有本地任务",
+        description: "在上方定义目标；启动后无需进入完整 Chat 页面。",
+      },
+    },
     composer: {
       label: "定义本地任务",
       eyebrow: "Local task / bounded input",
