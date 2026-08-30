@@ -3,7 +3,7 @@
 - 日期：2026-08-30
 - 平台：Windows
 - 验证提交：`1c531ca9eb`
-- 状态：R1、R2 本地实现、自动化验证与原生进程 smoke 完成；PR 队列和真实 Run smoke 待完成
+- 状态：R1、R2 实现、自动化验证、原生进程 smoke 与 stacked PR 发布完成；真实 Run 和视觉 smoke 待完成
 
 ## 1. 结论
 
@@ -12,23 +12,23 @@ Host：Rivloom Identity 与 Codex Runtime Auth 分离；用户可以从已登记
 在受管 worktree 中启动、观察和停止一次 Codex Run，并得到可校验 RunReceipt 与 Patch
 元数据。主流程不依赖完整 Chat 页面，也没有嵌入或修改 `codex-rs`。
 
-自动化 Gate 与不调用模型的原生进程 smoke 已通过，但还不能把 R2 写成“已发布并完成人工
-验收”：R1.2 到 R2.5a 的远端分支尚未创建 PR，R2.5b 之后仍只在本地；真实已登录 Codex
-的 Run smoke 也没有在无人值守状态下调用。后者会使用真实账号和模型，并可能等待本机
-审批，应在发布前由用户知情参与一次。
+自动化 Gate 与不调用模型的原生进程 smoke 已通过，20 个相邻 base/head 的 stacked PR
+也已发布。不过还不能把 R2 写成“完成人工验收”：真实已登录 Codex 的 Run smoke 没有在
+无人值守状态下调用。它会使用真实账号和模型，并可能等待本机审批，应由用户知情参与一次。
 
 ## 2. 里程碑完成度
 
-| 范围                             | 本地实现 | 自动化验证 | 发布状态                       |
-| -------------------------------- | -------- | ---------- | ------------------------------ |
-| R1.1 身份与 Runtime Auth 契约    | 完成     | 通过       | PR #41 已创建                  |
-| R1.2 本地身份存储                | 完成     | 通过       | 远端分支已上传，PR 待创建      |
-| R1.3 双状态首页                  | 完成     | 通过       | 远端分支已上传，PR 待创建      |
-| R2.1 Task/Run 状态机             | 完成     | 通过       | 本地与远端分支均有对应审查单元 |
-| R2.2 版本化 Task Store           | 完成     | 通过       | 本地与远端分支均有对应审查单元 |
-| R2.3 Codex Run 事件路由          | 完成     | 通过       | 本地与远端分支均有对应审查单元 |
-| R2.4 worktree 与 Patch Artifact  | 完成     | 通过       | 本地与远端分支均有对应审查单元 |
-| R2.5 RunReceipt、编排、命令与 UI | 完成     | 通过       | R2.5a 已上传；R2.5b 之后仅本地 |
+| 范围                             | 本地实现 | 自动化验证 | 发布状态                                                                        |
+| -------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------- |
+| R1.1 身份与 Runtime Auth 契约    | 完成     | 通过       | [PR #41](https://github.com/rivloom/rivloom/pull/41)                             |
+| R1.2 本地身份存储                | 完成     | 通过       | [PR #42](https://github.com/rivloom/rivloom/pull/42)                             |
+| R1.3 双状态首页                  | 完成     | 通过       | [PR #44](https://github.com/rivloom/rivloom/pull/44)                             |
+| R2.1 Task/Run 状态机             | 完成     | 通过       | [PR #45](https://github.com/rivloom/rivloom/pull/45)                             |
+| R2.2 版本化 Task Store           | 完成     | 通过       | [PR #46](https://github.com/rivloom/rivloom/pull/46)                             |
+| R2.3 Codex Run 事件路由          | 完成     | 通过       | [PR #47](https://github.com/rivloom/rivloom/pull/47)、[#48](https://github.com/rivloom/rivloom/pull/48) |
+| R2.4 worktree 与 Patch Artifact  | 完成     | 通过       | [PR #49](https://github.com/rivloom/rivloom/pull/49)、[#50](https://github.com/rivloom/rivloom/pull/50) |
+| R2.5 RunReceipt、编排、命令与 UI | 完成     | 通过       | [PR #51](https://github.com/rivloom/rivloom/pull/51) 到 [#64](https://github.com/rivloom/rivloom/pull/64) |
+| R2 Gate 与验证记录               | 完成     | 通过       | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
 
 R3 及之后没有提前开始。当前代码仍是 Codex 专用路径，没有为了 Hermes、Reasonix、
 Claude Code 或未知第三 Runtime 创建万能适配器。
@@ -130,14 +130,14 @@ Run 仍明确保留为人工验收，不能由这次启动结果替代。
 
 ## 8. 尚未完成与下一步
 
-1. 为已上传的 R1.2、R1.3、R2.1 到 R2.5a 分支按 stack 顺序创建 PR；R1.1 当前为
-   [PR #41](https://github.com/rivloom/rivloom/pull/41)。R2.5b 之后需先得到明确的远程分支
-   上传许可。本地完成不冒充远端已发布。
+1. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；前一项
+   合并后再把下一项 base 改回 `main`，不同时合并多个仍指向中间分支的 PR。
 2. 在用户知情参与时，用已登录的 Codex Runtime 和一个专用测试仓库完成原生 smoke：
    启动任务、观察状态、按需处理本机审批、停止一次 Run、验证 Patch 与 RunReceipt，并确认
    用户 checkout 未改变。
 3. 做一次真实 Tauri 窗口的窄/宽布局检查；自动化 snapshot 已覆盖文案和交互，但不替代
    Windows 原生 WebView 的最终视觉验收。
-4. 上述两项完成并发布后进入 R3.1；不提前开发第二 Runtime、Marketplace 或 Skill Directory。
+4. 上述两项完成且 R1/R2 stack 审查合并后进入 R3.1；不提前开发第二 Runtime、Marketplace
+   或 Skill Directory。
 
 CI 继续保持暂停；本记录不以缺少 CI 失败邮件代替任何本地测试证据。
