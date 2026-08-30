@@ -318,6 +318,36 @@ fn restart_reconciliation_marks_active_runs_unknown_once_without_rerunning_them(
     assert_eq!(restarted.get_task("task-1").unwrap().runs[0].receipt, None);
 }
 
+#[test]
+fn active_worker_failure_is_persisted_as_unknown_without_a_fabricated_receipt() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("tasks-v1.json");
+    TaskStore::new(path.clone())
+        .save(&[StoredTask {
+            idempotency_key: "create-1".to_string(),
+            project_id: Some(project_id()),
+            record: running_task(),
+            run_keys: vec![],
+        }])
+        .unwrap();
+    let service = TaskService::new(TaskStore::new(path));
+    let details = TransitionDetails::with_error("Runtime observation failed.");
+    let mut expected = running_task();
+    expected
+        .transition_run("run-1", RunStatus::OutcomeUnknown, details.clone())
+        .unwrap();
+    expected
+        .transition(TaskStatus::OutcomeUnknown, details)
+        .unwrap();
+
+    let run = service
+        .abandon_run("task-1", "run-1", "Runtime observation failed.")
+        .unwrap();
+
+    assert_eq!(run, expected.runs[0]);
+    assert_eq!(service.get_task("task-1").unwrap(), expected);
+}
+
 fn create_request(task_id: &str, idempotency_key: &str) -> CreateTaskRequest {
     CreateTaskRequest {
         task_id: task_id.to_string(),

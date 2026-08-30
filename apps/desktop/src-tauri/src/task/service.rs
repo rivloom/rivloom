@@ -416,6 +416,41 @@ impl TaskService {
         Ok(reconciled)
     }
 
+    pub(super) fn abandon_run(
+        &self,
+        task_id: &str,
+        run_id: &str,
+        error: &str,
+    ) -> Result<RunRecord, TaskServiceError> {
+        let mut cache = self.tasks.lock().map_err(|_| TaskServiceError::State)?;
+        self.ensure_loaded(&mut cache)?;
+        let tasks = cache.as_ref().ok_or(TaskServiceError::State)?;
+        let task_index = tasks
+            .iter()
+            .position(|task| task.record.id == task_id)
+            .ok_or(TaskServiceError::TaskNotFound)?;
+        let mut next = tasks.clone();
+        let details = TransitionDetails::with_error(error);
+        next[task_index].record.transition_run(
+            run_id,
+            RunStatus::OutcomeUnknown,
+            details.clone(),
+        )?;
+        next[task_index]
+            .record
+            .transition(TaskStatus::OutcomeUnknown, details)?;
+        self.store.save(&next)?;
+        let run = next[task_index]
+            .record
+            .runs
+            .iter()
+            .find(|run| run.id == run_id)
+            .cloned()
+            .ok_or(TaskServiceError::State)?;
+        *cache = Some(next);
+        Ok(run)
+    }
+
     fn ensure_loaded(&self, cache: &mut Option<Vec<StoredTask>>) -> Result<(), TaskServiceError> {
         if cache.is_none() {
             *cache = Some(self.store.load()?);
