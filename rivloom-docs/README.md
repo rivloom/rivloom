@@ -13,6 +13,8 @@ directory, which is reserved for upstream Codex documentation.
 - [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)
   records the current local implementation, automated evidence, publication state, and remaining
   native smoke checks.
+- [R1/R2 stacked PR queue](plans/2026-08-30-runtime-host-pr-stack.md) records the exact review order
+  and separates uploaded heads from local-only branches.
 - [2026-08-24 Rivloom Desktop 架构设计](plans/2026-08-24-rivloom-desktop-architecture-design.md)
   is retained as the historical A0–A2 baseline; its chat-first milestone order is superseded.
 
