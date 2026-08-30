@@ -208,7 +208,11 @@ Runtime payload。
 
 1. Node 解析本地项目映射并创建隔离 worktree。
 2. `CodexRuntime` 使用该 worktree 的 `cwd` 创建或恢复专用 thread。
-3. Node 发送一次明确的 `turn/start`，任务正文包含目标、约束和期望回执。
+3. Node 组合一次明确的 `turn/start`，任务正文只包含目标、约束和期望回执。首版对最终
+   序列化正文同时执行 4 KiB UTF-8 字节上限和 1,000 model token 上限；任一超限都在
+   调用 App Server 前拒绝，不静默截断、拆分或发送部分任务。未来若允许单项超过
+   1,000 tokens，必须作为 P0 模型上下文变更额外人工审查，且任何单项仍不得超过
+   10,000 tokens。
 4. 适配层把 App Server 事件压缩成 `queued/running/waitingApproval/completed/failed`。
 5. 本地用户处理仍由 Codex 发起的审批；远端只看到“等待本地处理”。
 6. 完成后 Node 从 worktree 收集 Patch、测试结果与有界摘要。
@@ -284,6 +288,7 @@ Claude Code、Hermes、Reasonix 等在进入里程碑前分别审查当时固定
 - 断线恢复进入对账流程，运行中的任务不会被自动重复执行。
 - 两个临时 Node 与一个测试 Brain 的端到端委派。
 - fake Codex App Server 下的 `turn/start`、事件、中断、审批和完成回执。
+- 最终 `turn/start` 任务正文的字节/token 双上限；边界外请求被拒绝且不会调用 Runtime。
 - worktree 隔离、Patch 大小限制、内容哈希和基线变化。
 - Windows 两机 Tailscale 或启用应用层 TLS 的 LAN 手工验收。
 
