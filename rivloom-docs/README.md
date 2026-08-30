@@ -10,6 +10,9 @@ directory, which is reserved for upstream Codex documentation.
   is the current authoritative product and architecture design.
 - [Runtime Host Transition Implementation Plan](plans/2026-08-30-runtime-host-transition-plan.md)
   defines the active milestones and delivery gates.
+- [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)
+  records the current local implementation, automated evidence, publication state, and remaining
+  native smoke checks.
 - [2026-08-24 Rivloom Desktop 架构设计](plans/2026-08-24-rivloom-desktop-architecture-design.md)
   is retained as the historical A0–A2 baseline; its chat-first milestone order is superseded.
 
