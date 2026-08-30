@@ -101,6 +101,45 @@ impl PatchArtifact {
             }),
         }
     }
+
+    pub(super) fn is_valid(&self) -> bool {
+        if self.limit_bytes != MAX_PATCH_BYTES || !valid_hex(&self.baseline_commit, &[40, 64]) {
+            return false;
+        }
+        match self.state {
+            PatchArtifactState::Empty => {
+                self.byte_count == Some(0)
+                    && self.sha256.as_deref() == Some(&sha256([]))
+                    && self.patch.as_deref() == Some("")
+            }
+            PatchArtifactState::Complete => self.patch.as_ref().is_some_and(|patch| {
+                !patch.is_empty()
+                    && patch.len() as u64 <= self.limit_bytes
+                    && self.byte_count == Some(patch.len() as u64)
+                    && self.sha256.as_deref() == Some(&sha256(patch.as_bytes()))
+            }),
+            PatchArtifactState::TooLarge => {
+                self.byte_count.is_none() && self.sha256.is_none() && self.patch.is_none()
+            }
+            PatchArtifactState::UnsupportedEncoding => {
+                self.byte_count
+                    .is_some_and(|bytes| bytes > 0 && bytes <= self.limit_bytes)
+                    && self
+                        .sha256
+                        .as_deref()
+                        .is_some_and(|hash| valid_hex(hash, &[64]))
+                    && self.patch.is_none()
+            }
+        }
+    }
+}
+
+fn sha256(bytes: impl AsRef<[u8]>) -> String {
+    format!("{:x}", Sha256::digest(bytes.as_ref()))
+}
+
+fn valid_hex(value: &str, lengths: &[usize]) -> bool {
+    lengths.contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
