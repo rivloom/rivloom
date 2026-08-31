@@ -9,7 +9,9 @@ Node 桌面 #86–#89 已按精确 Head 普通合并，独立主干验证见 Nod
 [状态 #91](https://github.com/rivloom/rivloom/pull/91) 358 行 →
 [信任 #92](https://github.com/rivloom/rivloom/pull/92) 574 行 →
 [托管 #93](https://github.com/rivloom/rivloom/pull/93) 354 行 →
-[成员 #94](https://github.com/rivloom/rivloom/pull/94) 464 行 → 总览接线（本批）。
+[成员 #94](https://github.com/rivloom/rivloom/pull/94) 464 行 → [总览 #95](https://github.com/rivloom/rivloom/pull/95)（本批）。
+
+六张均保留 Draft，已完成串行自审并标记 code-reviewed；没有外部 review/comment。远端仅 metadata 检查有结果，未恢复产品 CI。
 
 ## 类型、桥接和输入边界
 
