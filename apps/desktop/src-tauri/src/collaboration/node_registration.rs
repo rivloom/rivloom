@@ -49,9 +49,13 @@ impl NodeRegistration {
     /// Restores the previously recorded confirmation; never derives a replacement confirmation.
     pub(super) fn trusted_peer(&self) -> Result<TrustedPeer, RegistrationError> {
         TrustedPeer::confirm(
-            &self.descriptor.encode().map_err(|_| RegistrationError::Invalid)?,
+            &self
+                .descriptor
+                .encode()
+                .map_err(|_| RegistrationError::Invalid)?,
             &self.confirmed_fingerprint,
-        ).map_err(|_| RegistrationError::Invalid)
+        )
+        .map_err(|_| RegistrationError::Invalid)
     }
 
     fn validate_binding(&self, binding: &CredentialBinding) -> Result<(), RegistrationError> {
@@ -82,15 +86,23 @@ impl RegistrationStore {
         fs::create_dir_all(self.directory.parent().ok_or(RegistrationError::Invalid)?)
             .map_err(|_| RegistrationError::Storage)?;
         fs::create_dir(&self.directory).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::AlreadyExists { RegistrationError::Existing }
-            else { RegistrationError::Storage }
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                RegistrationError::Existing
+            } else {
+                RegistrationError::Storage
+            }
         })?;
         write_new(&self.directory.join("registration-v1.json"), registration)
     }
 
-    pub(super) fn load(&self, identity: &RivloomIdentity) -> Result<NodeRegistration, RegistrationError> {
+    pub(super) fn load(
+        &self,
+        identity: &RivloomIdentity,
+    ) -> Result<NodeRegistration, RegistrationError> {
         let registration = self.read_registration()?;
-        if registration.identity_id != identity.identity_id || registration.device_id != identity.device_id {
+        if registration.identity_id != identity.identity_id
+            || registration.device_id != identity.device_id
+        {
             return Err(RegistrationError::Invalid);
         }
         Ok(registration)
@@ -98,23 +110,40 @@ impl RegistrationStore {
 
     fn read_registration(&self) -> Result<NodeRegistration, RegistrationError> {
         let metadata = fs::symlink_metadata(&self.directory).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound { RegistrationError::NotConfigured }
-            else { RegistrationError::Storage }
+            if error.kind() == std::io::ErrorKind::NotFound {
+                RegistrationError::NotConfigured
+            } else {
+                RegistrationError::Storage
+            }
         })?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() { return Err(RegistrationError::Invalid); }
-        let registration: NodeRegistration = read(&self.directory.join("registration-v1.json"), 12 * 1024)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(RegistrationError::Invalid);
+        }
+        let registration: NodeRegistration =
+            read(&self.directory.join("registration-v1.json"), 12 * 1024)?;
         registration.validate()?;
         Ok(registration)
     }
 
-    pub(super) fn complete(&self, registration: &NodeRegistration, binding: &CredentialBinding) -> Result<(), RegistrationError> {
-        if self.read_registration()? != *registration { return Err(RegistrationError::Invalid); }
+    pub(super) fn complete(
+        &self,
+        registration: &NodeRegistration,
+        binding: &CredentialBinding,
+    ) -> Result<(), RegistrationError> {
+        if self.read_registration()? != *registration {
+            return Err(RegistrationError::Invalid);
+        }
         registration.validate_binding(binding)?;
         write_new(&self.directory.join("binding-v1.json"), binding)
     }
 
-    pub(super) fn binding(&self, registration: &NodeRegistration) -> Result<CredentialBinding, RegistrationError> {
-        if self.read_registration()? != *registration { return Err(RegistrationError::Invalid); }
+    pub(super) fn binding(
+        &self,
+        registration: &NodeRegistration,
+    ) -> Result<CredentialBinding, RegistrationError> {
+        if self.read_registration()? != *registration {
+            return Err(RegistrationError::Invalid);
+        }
         let binding = read(&self.directory.join("binding-v1.json"), 1024)?;
         registration.validate_binding(&binding)?;
         Ok(binding)
@@ -127,24 +156,39 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path, limit: u64) -> Result<T, Re
         return Err(RegistrationError::Invalid);
     }
     let mut bytes = Vec::new();
-    fs::File::open(path).map_err(|_| RegistrationError::Storage)?
-        .take(limit + 1).read_to_end(&mut bytes).map_err(|_| RegistrationError::Storage)?;
-    if bytes.len() as u64 > limit { return Err(RegistrationError::Invalid); }
+    fs::File::open(path)
+        .map_err(|_| RegistrationError::Storage)?
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| RegistrationError::Storage)?;
+    if bytes.len() as u64 > limit {
+        return Err(RegistrationError::Invalid);
+    }
     serde_json::from_slice(&bytes).map_err(|_| RegistrationError::Invalid)
 }
 
 fn write_new<T: Serialize>(path: &Path, value: &T) -> Result<(), RegistrationError> {
     let bytes = serde_json::to_vec(value).map_err(|_| RegistrationError::Invalid)?;
-    if bytes.len() > 12 * 1024 { return Err(RegistrationError::Invalid); }
+    if bytes.len() > 12 * 1024 {
+        return Err(RegistrationError::Invalid);
+    }
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
-    { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
     let mut file = options.open(path).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::AlreadyExists { RegistrationError::Existing }
-        else { RegistrationError::Storage }
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            RegistrationError::Existing
+        } else {
+            RegistrationError::Storage
+        }
     })?;
-    file.write_all(&bytes).and_then(|_| file.sync_all()).map_err(|_| RegistrationError::Storage)
+    file.write_all(&bytes)
+        .and_then(|_| file.sync_all())
+        .map_err(|_| RegistrationError::Storage)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
