@@ -17,12 +17,12 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 3. [PR #77](https://github.com/rivloom/rivloom/pull/77)，738 行：TLS、证书身份固定和有界传输。
 4. [PR #78](https://github.com/rivloom/rivloom/pull/78)，470 行：Windows Node 凭证保护。
 5. [PR #79](https://github.com/rivloom/rivloom/pull/79)，694 行：Brain 认证服务、owner 鉴权和请求限流。
-6. `codex/r3-4-tls-listener`，447 行：TLS 监听生命周期与有界 worker；已推送，创建 PR 被 GitHub 拒绝。
-7. `codex/r3-4-node-client`，621 行：Node 客户端接线和两个 Node 的纵向传输测试；PR 待创建。
+6. [PR #80](https://github.com/rivloom/rivloom/pull/80)，447 行：TLS 监听生命周期与有界 worker。
+7. [PR #81](https://github.com/rivloom/rivloom/pull/81)，621 行：Node 客户端接线和两个 Node 的纵向传输测试。
 
-#75–#79 均为 Draft，未合并。监听器的两次 `CreatePullRequest` 请求均返回权限错误，
-只读检查显示当前账号仍有仓库 ADMIN 权限；未更换凭证或绕过访问控制。
-最终发布状态及各分支精确 Head 另见本机交接记录；已推送不等于 PR 已创建。
+#75–#81 均为 Draft，未合并；已串行自审，不代表独立他人批准。
+发布时发现 fork 的 gh 默认指向上游，导致两次创建请求被拒绝；显式指定目标后已正常发布。
+后续 gh 命令必须带 `-R rivloom/rivloom`，不能依赖工作目录推断仓库；未更换凭证或绕过访问控制。
 
 ## 对账和隐私边界
 
