@@ -18,7 +18,8 @@ R3.3 从该最新 origin/main 创建 `C:/project/opencohive/.worktrees/r3-3-brai
    Brain 成员/Node/presence 和唯一修订号。
 3. R3.3c：[PR #73](https://github.com/rivloom/rivloom/pull/73)，636 行；
    Task 状态、发送者限定的重放与乱序保护。
-4. R3.3d：`codex/r3-3-atomic-storage`，单写者、原子快照和失败恢复。
+4. R3.3d：[PR #74](https://github.com/rivloom/rivloom/pull/74)，694 行；
+   单写者、原子快照和失败恢复。实现提交 `a6ff1fb117`，后续仅更新交接文档。
 
 ## 实现边界
 
@@ -81,6 +82,7 @@ Windows 使用 [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api
 本轮只在 Windows 执行测试，没有把其他 OS 或实际断电测试记为通过。
 新增 9 项存储测试；最终 `just test-rust` 263 + 4、`just check` 95 + build、
 两组 Clippy（`-D warnings`）、桌面格式检查通过。R3.3 共新增 25 项行为测试。
+四张 PR 均完成串行自审，保持 Draft 等待审查合并；没有新增模型上下文或变更对外协议形状。
 锁文件只新增 fs2，未升级其他依赖；所需 `just bazel-lock-update` 和上游 `just fmt`
 仍因既有失效 Python 启动器失败，未生成 MODULE.bazel.lock 更新，不计为通过。
 
