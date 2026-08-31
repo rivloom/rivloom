@@ -5,6 +5,7 @@ mod invitation;
 mod node;
 mod protocol;
 mod reconcile;
+mod secret_store;
 mod snapshot;
 mod storage;
 mod tls;
