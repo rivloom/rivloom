@@ -45,7 +45,7 @@ pub(super) trait SecretBackend {
     fn remove(&self, target: &str) -> Result<(), VaultError>;
 }
 
-impl<B: SecretBackend> SecretBackend for std::sync::Arc<B> {
+impl<B: SecretBackend + ?Sized> SecretBackend for std::sync::Arc<B> {
     fn read(&self, target: &str) -> Result<Option<Zeroizing<Vec<u8>>>, VaultError> {
         (**self).read(target)
     }

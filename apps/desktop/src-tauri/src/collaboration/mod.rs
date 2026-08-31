@@ -1,6 +1,7 @@
 mod brain;
 mod brain_tasks;
 mod client;
+pub(crate) mod commands;
 mod credential;
 mod host;
 mod host_profile;
