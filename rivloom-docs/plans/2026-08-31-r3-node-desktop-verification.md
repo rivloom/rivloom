@@ -39,6 +39,18 @@ connected 表示最后一次认证/对账成功，不是持续在线保证；没
 见 `.r3-session-rust-retry.log`；根因尚未确定，真实设备验收须关注凭证持久性。
 95 前端及构建、两组 Clippy、桌面格式检查通过。
 
+## 第三阶段：owner 接入、成员目录及邀请
+
+本机 owner 使用 managed Brain profile、明确确认的 fingerprint 和已有 OS 凭证连接；认证后的
+成员必须是未撤销 owner 且匹配 R1 identity，才写入 Node 登记。不会为 owner 自动兑换邀请或创建新成员。
+成员目录只返回最多 128 个 member/node 摘要、最多 64 KiB，不包含 Task、完整 announcement、identity/device
+ID、路径或密钥。目录是最后完整对账结果，disconnected 时不作为当前目录返回。
+创建、取消邀请和撤销均调用已认证 Client，权限仍由 Brain 检查；不自动重试管理操作。
+专用 InvitationSecret 允许短时 IPC 传递邀请，Debug 脱敏、解析缓冲清零；Node/TLS secret 没有 DTO 出口。
+邀请只含 brainId、invitationId、expiresAt 和 secret，不进入状态、目录或普通文件。
+四项真实 TLS/DTO 测试及完整 334 + 4 + 4 Rust、95 前端及构建、两组 Clippy、桌面格式通过。
+本阶段原生凭证测试通过；此前一次消失异常仍保留，未宣称原因已解决。
+
 ## 剩余工作与保留限制
 
 Node service、连接/加入/邀请命令与 UI 分阶段接线。所有网络操作显式触发，不自动确认信任、重新加入、

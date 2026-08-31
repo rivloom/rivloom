@@ -110,6 +110,42 @@ impl<B: SecretBackend> NodeSession<B> {
         self.describe(identity, &state)
     }
 
+    /// The desktop supplies only its running managed Brain profile, never an IPC profile/binding.
+    pub(super) fn connect_owner(
+        &self,
+        identity: &RivloomIdentity,
+        profile: &super::host_profile::HostProfile,
+        confirmed_fingerprint: &str,
+    ) -> Result<NodeStatus, SessionError> {
+        let mut state = self.guard()?;
+        let registration = NodeRegistration::confirmed(
+            identity,
+            &profile
+                .descriptor
+                .encode()
+                .map_err(|_| SessionError::Invalid)?,
+            confirmed_fingerprint,
+        )?;
+        if profile.binding.device_id != identity.device_id {
+            return Err(SessionError::Invalid);
+        }
+        let peer = registration
+            .trusted_peer()?
+            .peer()
+            .map_err(|_| SessionError::Invalid)?;
+        // Authenticate the existing protected owner credential before registering any local binding.
+        let client = Client::connect(&peer, &self.vault, profile.binding.clone())?;
+        if !client.view().shared_records().any(|record| matches!(&record.data,
+            super::reconcile::SharedData::Member { member_id, identity_id, owner: true, revoked: false, .. }
+                if member_id == &profile.binding.member_id && identity_id == &identity.identity_id)) {
+            return Err(SessionError::Invalid);
+        }
+        self.store.begin(&registration)?;
+        self.store.complete(&registration, client.binding())?;
+        state.client = Some(client);
+        self.describe(identity, &state)
+    }
+
     /// Explicit refresh renews presence and reads a completed projection, not a liveness promise.
     pub(super) fn refresh(&self, identity: &RivloomIdentity) -> Result<NodeStatus, SessionError> {
         self.with_client(identity, |client| client.pulse())?;
