@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fs;
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -11,10 +12,12 @@ use super::*;
 use crate::app_server::NotificationObserver;
 use crate::app_server::event_router::RunEventKind;
 use crate::project::ProjectState;
+use crate::task::worktree::TaskWorktree;
+use crate::task::worktree::TaskWorktreeManager;
 
 #[test]
-fn start_uses_only_the_registered_cwd_and_keeps_an_early_started_event() {
-    let (_temp_dir, project) = registered_project();
+fn start_uses_only_the_isolated_worktree_and_keeps_an_early_started_event() {
+    let (_temp_dir, worktree) = isolated_worktree();
     let router = Arc::new(EventRouter::default());
     let connection = Arc::new(RecordingConnection::new(
         vec![Ok(start_response())],
@@ -28,7 +31,7 @@ fn start_uses_only_the_registered_cwd_and_keeps_an_early_started_event() {
                 run_id: "run-1",
                 thread_id: "thread-1",
                 prompt: "Implement the bounded task",
-                project: &project,
+                worktree: &worktree,
             },
             connection.clone(),
             &router,
@@ -54,7 +57,7 @@ fn start_uses_only_the_registered_cwd_and_keeps_an_early_started_event() {
                 "threadId": "thread-1",
                 "clientUserMessageId": "run-1",
                 "input": [{"type": "text", "text": "Implement the bounded task"}],
-                "cwd": project.cwd(),
+                "cwd": worktree.cwd(),
             }),
         )]
     );
@@ -65,7 +68,7 @@ fn start_uses_only_the_registered_cwd_and_keeps_an_early_started_event() {
                     run_id: "run-1",
                     thread_id: "thread-1",
                     prompt: "must not run twice",
-                    project: &project,
+                    worktree: &worktree,
                 },
                 connection.clone(),
                 &router,
@@ -78,7 +81,7 @@ fn start_uses_only_the_registered_cwd_and_keeps_an_early_started_event() {
 
 #[test]
 fn invalid_or_oversized_requests_never_reach_app_server() {
-    let (_temp_dir, project) = registered_project();
+    let (_temp_dir, worktree) = isolated_worktree();
     let router = EventRouter::default();
     let connection = Arc::new(RecordingConnection::new(vec![], None));
     let runtime = CodexRuntime::default();
@@ -96,7 +99,7 @@ fn invalid_or_oversized_requests_never_reach_app_server() {
                         run_id,
                         thread_id,
                         prompt: &prompt,
-                        project: &project,
+                        worktree: &worktree,
                     },
                     connection.clone(),
                     &router,
@@ -110,7 +113,7 @@ fn invalid_or_oversized_requests_never_reach_app_server() {
 
 #[test]
 fn interrupt_requires_the_exact_active_runtime_and_connection() {
-    let (_temp_dir, project) = registered_project();
+    let (_temp_dir, worktree) = isolated_worktree();
     let router = Arc::new(EventRouter::default());
     let connection = Arc::new(RecordingConnection::new(
         vec![Ok(start_response()), Ok(json!({}))],
@@ -123,7 +126,7 @@ fn interrupt_requires_the_exact_active_runtime_and_connection() {
                 run_id: "run-1",
                 thread_id: "thread-1",
                 prompt: "goal",
-                project: &project,
+                worktree: &worktree,
             },
             connection.clone(),
             &router,
@@ -166,7 +169,7 @@ fn interrupt_requires_the_exact_active_runtime_and_connection() {
 
 #[test]
 fn malformed_and_disconnected_responses_are_sanitized() {
-    let (_temp_dir, project) = registered_project();
+    let (_temp_dir, worktree) = isolated_worktree();
     let router = EventRouter::default();
     let runtime = CodexRuntime::default();
 
@@ -190,7 +193,7 @@ fn malformed_and_disconnected_responses_are_sanitized() {
                 run_id: "run-1",
                 thread_id: "thread-1",
                 prompt: "goal",
-                project: &project,
+                worktree: &worktree,
             },
             connection,
             &router,
@@ -203,7 +206,7 @@ fn malformed_and_disconnected_responses_are_sanitized() {
 
 #[test]
 fn an_early_turn_that_disagrees_with_the_response_is_never_rebound() {
-    let (_temp_dir, project) = registered_project();
+    let (_temp_dir, worktree) = isolated_worktree();
     let router = Arc::new(EventRouter::default());
     let connection = Arc::new(RecordingConnection::new(
         vec![Ok(json!({
@@ -218,7 +221,7 @@ fn an_early_turn_that_disagrees_with_the_response_is_never_rebound() {
                 run_id: "run-1",
                 thread_id: "thread-1",
                 prompt: "goal",
-                project: &project,
+                worktree: &worktree,
             },
             connection,
             &router,
@@ -228,14 +231,37 @@ fn an_early_turn_that_disagrees_with_the_response_is_never_rebound() {
     assert_eq!(error, Some(CodexRuntimeError::OutcomeUnknown));
 }
 
-fn registered_project() -> (tempfile::TempDir, ResolvedProject) {
+fn isolated_worktree() -> (tempfile::TempDir, TaskWorktree) {
     let temp_dir = tempfile::tempdir().unwrap();
-    let project_path = temp_dir.path().join("project");
+    let project_path = temp_dir.path().join("repository");
     fs::create_dir(&project_path).unwrap();
+    git(&project_path, &["init"]);
+    git(
+        &project_path,
+        &["config", "user.email", "tests@rivloom.local"],
+    );
+    git(&project_path, &["config", "user.name", "Rivloom Tests"]);
+    git(&project_path, &["config", "core.autocrlf", "false"]);
+    fs::write(project_path.join("tracked.txt"), "baseline\n").unwrap();
+    git(&project_path, &["add", "tracked.txt"]);
+    git(&project_path, &["commit", "-m", "baseline"]);
     let state = ProjectState::new(temp_dir.path().join("recent-projects-v1.json"));
     let selection = state.select_project(Some(project_path)).unwrap().unwrap();
     let project = state.lookup_project(&selection.project.id).unwrap();
-    (temp_dir, project)
+    let worktree = TaskWorktreeManager::new(temp_dir.path().join("managed-worktrees"))
+        .create(&project, "fixture-run")
+        .unwrap();
+    (temp_dir, worktree)
+}
+
+fn git(cwd: &std::path::Path, args: &[&str]) {
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(args)
+        .status()
+        .unwrap();
+    assert!(status.success());
 }
 
 fn start_response() -> Value {
