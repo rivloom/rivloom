@@ -17,8 +17,8 @@
 | ------------------ | -------------------------------------------- | --------------------------------------------------- |
 | R0 路线收尾        | 已进入 `main`                                | 无                                                  |
 | R1 身份分离        | 本地实现与自动化验证完成；PR #41/#42/#44 已创建 | 按 stacked 顺序审查和合并                         |
-| R2 单机 Task Run   | 实现、自动化和视觉 Gate 完成；已选 elevated     | 解决双 Home 共存并重跑真实 success/cancel Gate        |
-| R3 最小 Brain      | 未开始                                       | R2 发布和原生 smoke 完成后冻结协作协议 v1           |
+| R2 单机 Task Run   | 已接受收口；带已知 Windows Runtime 限制          | `R2-FU1` 在 Gate R4 前补做真实 Runtime Gate           |
+| R3 最小 Brain      | 未开始                                       | 开始 R3.1，冻结协作协议 v1                          |
 | R4 远端委派        | 未开始                                       | 依赖 Gate R3                                        |
 | R5 Artifact 审查   | 未开始                                       | 依赖 Gate R4                                        |
 | R6 第二 Runtime    | 未开始                                       | 依赖 Gate R5，并先完成许可证与产品能力评审          |
@@ -28,10 +28,13 @@
 剩余限制见 [R1/R2 验证记录](2026-08-30-runtime-host-r1-r2-verification.md)。CI 仍按当前
 项目决定保持暂停，不作为本地 Gate 通过的替代证据。
 
-R2 的目标临时 Runtime 审批策略、严格安全边界和恢复条件由
+R2 的里程碑收口由
+[ADR-0008](../adr/0008-close-r2-with-deferred-windows-runtime-validation.md) 记录；目标临时
+Runtime 审批策略、严格安全边界和恢复条件由
 [ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md) 固定；用户已确认保留 elevated，
-不再等待路线选择。Windows 接入仍被多 Runtime Home 的沙箱凭据冲突阻塞，先按 ADR 验证
-受支持的共存方案。不得因 Runtime 升级静默恢复自动审批，也不得为了通过 Gate 放宽沙箱。
+不再等待路线选择。Windows 接入问题登记为 `R2-FU1`，不阻塞 R3 实现，但必须在接受 Gate R4
+和对外宣称 Windows 本地闭环可用前完成。不得因 Runtime 升级静默恢复自动审批，也不得为了
+通过 Gate 放宽沙箱。
 
 企业可显式授权高风险业务操作是已记录的后续产品方向，不把 R2 禁网/单 worktree 固化为
 永久限制。R3.1/R4.1 设计时明确执行权限的授权与审计边界；实际启用扩权能力必须经过独立
@@ -48,7 +51,8 @@ R2 的目标临时 Runtime 审批策略、严格安全边界和恢复条件由
 - 单个非机械 PR 控制在 800 行以内，复杂逻辑尽量低于 500 行。
 - 所有跨进程和跨 Node payload 必须有硬上限、版本号和脱敏错误。
 - 不允许跨网传输 Runtime Token、本机绝对路径、完整环境变量或无限日志。
-- 每个阶段的 Gate 未通过时，不开始后续 Runtime 或 Marketplace 工作。
+- Gate 未通过时默认不开始依赖它的后续工作；显式 ADR 接受后移的项目必须有编号和更晚的
+  硬 Gate，不能静默消失或由测试替身冒充真实验收。
 - UI 变化必须补充现有 React snapshot/组件覆盖；Rust 变更按仓库规则运行
   `just fmt`、项目测试和有针对性的 lint。
 - 能在未修改分支的 `origin/main` 上复现的全仓 CI 基线故障单独跟踪；不能把它伪装成
@@ -327,6 +331,8 @@ cargo test account
 
 - 单机能够从本地 Task 启动 Codex、看到有限状态、停止 Run，并得到可校验 RunReceipt。
 - 没有完整 Chat 页面也能完成这条闭环。
+- 2026-08-31 按 ADR-0008 接受实现里程碑收口；真实 Windows success/cancel 保留为
+  `R2-FU1`，不计为已通过，且必须在接受 Gate R4 前补齐。
 
 ## 6. R3：最小 Brain 与两个 Node
 
@@ -472,6 +478,8 @@ cargo test account
 
 **Gate R4:**
 
+- 接受前必须关闭 `R2-FU1`，附上 ADR-0007 要求的候选 Runtime 来源/版本/hash、双 Home
+  共存和单机 success/cancel/边界/cleanup 的真实证据；不能由 fake Codex 代替。
 - Alice 和 Bob 可以在两台 Node 上完成真实 Codex 任务委派，且断线不会自动重复执行。
 
 ## 8. R5：Patch 与测试结果审查

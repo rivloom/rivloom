@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted — Temporary（2026-08-31 已确认 elevated 方向；Windows 接入仍阻塞）
+Accepted — Temporary（2026-08-31 已确认 elevated 方向；Windows 接入转为 `R2-FU1`）
 
 ## 背景
 
@@ -80,7 +80,9 @@ Home 已保存的凭据失效；两个 Home 可能相互破坏。这个结论是
 
 用户选择保留 `elevated`，不采用 `unelevated` 作为当前 R2 解法。Rivloom 继续保留隔离
 `CODEX_HOME`；先解决设备级沙箱账号状态与多个 Home 的兼容问题，再实施目标 `never`
-策略并复验真实 Gate。此选择确认的是技术方向，不代表 elevated 已启用或 R2 已验收。
+策略并复验真实 Gate。此选择确认的是技术方向，不代表 elevated 已启用或真实 Gate 已通过。
+R2 实现里程碑已按 [ADR-0008](0008-close-r2-with-deferred-windows-runtime-validation.md)
+接受收口，该兼容性验收以后续项 `R2-FU1` 保留。
 
 ### 当前公开接入面核查
 
@@ -164,7 +166,8 @@ worktree 和 `never` 固化为永久能力上限。`elevated` 是隔离机制选
 
 - R2 的实现、自动化与视觉 Gate 已完成，但真实 success/cancel Gate 仍未收口。
 - Windows 上暂时没有同时满足隔离 Home、较强原生沙箱和无人值守执行的已验证组合。
-- elevated 方向已确定；进入 R3 前仍需解决共存接入并补做真实 success、cancel 和清理 Gate。
+- elevated 方向已确定；共存接入及真实 success/cancel/清理验收转为 `R2-FU1`，必须在
+  接受 Gate R4 和对外宣称 Windows 本地任务闭环可用前完成。
 
 ### 中性
 
@@ -209,6 +212,7 @@ worktree 和 `never` 固化为永久能力上限。`elevated` 是隔离机制选
 ## 参考资料
 
 - [ADR-0005：采用外部 Agent Runtime](0005-use-external-agent-runtimes.md)
+- [ADR-0008：接受已知限制并收口 R2](0008-close-r2-with-deferred-windows-runtime-validation.md)
 - [R1/R2 Runtime Host 验证记录](../plans/2026-08-30-runtime-host-r1-r2-verification.md)
 - [Runtime Host Transition Implementation Plan](../plans/2026-08-30-runtime-host-transition-plan.md)
 - [OpenAI：Windows sandbox](https://learn.chatgpt.com/docs/windows/windows-sandbox)

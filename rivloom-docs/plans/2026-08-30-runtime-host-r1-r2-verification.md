@@ -1,12 +1,12 @@
 # Rivloom Runtime Host R1/R2 验证记录
 
 - 日期：2026-08-30
-- 决策更新：2026-08-31，用户确认保留 elevated 方向
+- 决策更新：2026-08-31，用户确认保留 elevated 方向，并接受 R2 带已知限制收口
 - 平台：Windows
 - 实现基线：`1c531ca9eb`
 - Gate 分支：`codex/r2-gate-docs`
-- 状态：R1/R2 实现与自动化验证完成；原生宽/窄窗口视觉 Gate 通过；elevated 方向已确定，
-  Windows 接入仍被隔离 Runtime Home 与沙箱凭据冲突阻塞
+- 状态：R2 实现里程碑已接受收口；自动化与原生宽/窄窗口视觉 Gate 通过；真实 Windows
+  success/cancel 验收以后续项 `R2-FU1` 保留
 
 ## 1. 结论
 
@@ -33,8 +33,8 @@ Home 使用的同一账号密码。该风险不能靠代答一次管理员确认
 
 Rivloom 对已验证的 Runtime 崩溃和执行中重启按设计 fail closed：Run 进入 `outcomeUnknown`，
 不会自动重跑。`never` 工具受拒但 Turn 完成的诊断场景不能算目标成功，不能笼统归为同一种
-未知终态。专用仓库的 checkout、HEAD 和基线文件均未改变。用户已选择 elevated；下一步是
-解决多 Home 共存并重跑 success/cancel Gate，不再等待用户二选一。
+未知终态。专用仓库的 checkout、HEAD 和基线文件均未改变。用户已选择 elevated，并把
+共存接入及真实 success/cancel 验收后移为 `R2-FU1`，不再阻塞 R2 收口和 R3 开工。
 
 ## 2. 里程碑完成度
 
@@ -49,7 +49,8 @@ Rivloom 对已验证的 Runtime 崩溃和执行中重启按设计 fail closed：
 | R2.4 worktree 与 Patch Artifact  | 完成     | 通过                 | [PR #49](https://github.com/rivloom/rivloom/pull/49)、[#50](https://github.com/rivloom/rivloom/pull/50) |
 | R2.5 RunReceipt、编排、命令与 UI | 完成     | 自动化通过           | [PR #51](https://github.com/rivloom/rivloom/pull/51) 到 [#64](https://github.com/rivloom/rivloom/pull/64) |
 | R2 原生视觉 Gate                | 完成     | 通过                 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
-| R2 真实 success/cancel Gate     | 未完成   | elevated 已选定，共存接入待验证 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                    |
+| R2 里程碑收口                   | 已接受   | 带已知 Windows Runtime 限制 | [ADR-0008](../adr/0008-close-r2-with-deferred-windows-runtime-validation.md) |
+| R2-FU1 真实 success/cancel Gate | 后续项   | elevated 共存接入待验证 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                         |
 
 R3 及之后没有提前开始。当前代码仍是 Codex 专用路径，没有为了 Hermes、Reasonix、
 Claude Code 或未知第三 Runtime 创建万能适配器。
@@ -198,19 +199,22 @@ Codex Home 的 `.sandbox-secrets`，也没有批准 Windows 安全提示。
 - Patch 正文只作为当前进程内的短期 Artifact 提供给本机 UI，不进入 RunReceipt 或 Task Store。
 - 本次验证没有读取、记录或提交账号 Token、OAuth URL 或账号文件内容。
 
-## 9. 已确认方向与下一步
+## 9. R2 收口决定与下一步
 
-1. 按 2026-08-31 用户确认保留 elevated，执行 ADR-0007 的候选版本、独立测试环境和双 Home
+根据 [ADR-0008](../adr/0008-close-r2-with-deferred-windows-runtime-validation.md)，R2 作为
+实现里程碑已接受收口。真实 Runtime 未通过项保留为 `R2-FU1`；后续安排如下：
+
+1. 开始 R3.1；`R2-FU1` 不阻塞 R3 实现，但必须在接受 Gate R4 和对外宣称 Windows 本地任务
+   闭环可用前完成。不提前开发第二 Runtime、Marketplace 或 Skill Directory。
+2. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；
+   前一项合并后再把下一项 base 改回 `main`。R3.1 可以在该 stack 继续审查期间开始。
+3. 处理 `R2-FU1` 时保留 elevated，执行 ADR-0007 的候选版本、独立测试环境和双 Home
    共存 Gate。当前所查配置和公开 setup API 没有账号名/凭据目录 override；这不是等待用户
    选择，而是已选路线的接入阻塞。不复用整个主 Codex Home，不复制或链接 `.sandbox-secrets`。
-2. 有受支持且通过共存验证的方案后，在独立、有界的实现 PR 中落地，再重跑 success、Patch、
+4. 有受支持且通过共存验证的方案后，在独立、有界的实现 PR 中落地，再重跑 success、Patch、
    RunReceipt、cancel 和 worktree cleanup Gate，并明确记录越界拒绝的终态。不得只凭 Turn
    completed 或正确的请求参数认定目标/沙箱验收通过，不得自动扩大权限或重跑未知结果。
-3. 未来恢复 `on-request + auto_review` 前必须满足 ADR-0007 的版本固定、原始回归、真实
+5. 未来恢复 `on-request + auto_review` 前必须满足 ADR-0007 的版本固定、原始回归、真实
    审批、安全审查和独立 PR 条件；不得随 Runtime 升级静默切换。
-4. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；
-   前一项合并后再把下一项 base 改回 `main`。
-5. Runtime Gate 补齐且 R1/R2 stack 审查合并后进入 R3.1；不提前开发第二 Runtime、
-   Marketplace 或 Skill Directory。
 
 CI 继续保持暂停；本记录不以缺少 CI 失败邮件代替任何本地测试证据。

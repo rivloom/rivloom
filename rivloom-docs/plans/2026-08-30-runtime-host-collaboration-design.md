@@ -232,8 +232,10 @@ R2 单机 Gate 已按
 Rivloom 受管 Codex Run 使用 `approvalPolicy=never`、唯一受管 worktree 可写并禁网，需要例外
 权限的操作在本机失败，不进入自动或人工审批。该目标在 Windows 上仍被隔离 Runtime Home
 与 elevated 沙箱凭据冲突阻塞；用户已确认保留 elevated，接入待验证而非路线待选择。
-当前代码继续使用 `on-request + auto_review`，真实 Gate 未通过。上述第 5 项仍是恢复审批
-能力以及 R3/R4 本地 Node 流程的目标，不能把尚未落地的 R2 临时策略扩展成长期产品语义。
+当前代码继续使用 `on-request + auto_review`，真实 Gate 未通过；该项按
+[ADR-0008](../adr/0008-close-r2-with-deferred-windows-runtime-validation.md) 登记为 `R2-FU1`。
+它不阻塞 R3 协作基础实现，但必须在接受 Gate R4 前完成。上述第 5 项仍是恢复审批能力以及
+R3/R4 本地 Node 流程的目标，不能把尚未落地的 R2 临时策略扩展成长期产品语义。
 
 任务详情可以展示有限的事件时间线，但不把无限对话历史或原始 JSONL 同步给 Brain。
 
@@ -257,8 +259,8 @@ Rivloom 受管 Codex Run 使用 `approvalPolicy=never`、唯一受管 worktree �
 - Brain 不保存 Runtime 凭证，不代替 Node 登录 Runtime。
 - 执行必须绑定一次接受记录、项目映射、Run ID 和幂等键。
 - 默认在隔离 worktree 运行；不能静默写入用户当前 checkout。
-- R2 目标临时无人值守模式不能请求沙箱例外、联网或自动降级重跑；Windows 实施必须先
-  解决 ADR-0007 的双 Home 共存问题，恢复审批则必须满足其显式退出条件。
+- R2 目标临时无人值守模式不能请求沙箱例外、联网或自动降级重跑；ADR-0007 的双 Home
+  共存问题登记为 `R2-FU1`，必须在 Gate R4 前解决，恢复审批则必须满足其显式退出条件。
 - Artifact 有单项和总量硬上限，并校验内容哈希。
 - 未知协议版本、身份不匹配或签名失败时拒绝降级。
 - 高风险本地审批不允许由远端自动确认。
