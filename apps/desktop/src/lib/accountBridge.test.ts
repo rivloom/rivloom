@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AccountStatus } from "../types/account";
+import type { CodexRuntimeAuthStatus } from "../types/account";
 
 const tauriMocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -23,7 +23,7 @@ import {
   startChatgptLogin,
 } from "./accountBridge";
 
-const signedOutStatus: AccountStatus = { state: "signedOut" };
+const signedOutStatus: CodexRuntimeAuthStatus = { state: "signedOut" };
 
 describe("accountBridge", () => {
   beforeEach(() => {
@@ -47,7 +47,7 @@ describe("accountBridge", () => {
   it("forwards only normalized account status events and exposes cleanup", async () => {
     const unlisten = vi.fn();
     const listener = vi.fn();
-    const signedInStatus: AccountStatus = {
+    const signedInStatus: CodexRuntimeAuthStatus = {
       state: "signedIn",
       email: null,
       planType: "plus",
@@ -55,7 +55,7 @@ describe("accountBridge", () => {
     tauriMocks.listen.mockImplementation(
       async (
         eventName: string,
-        handler: (event: { payload: AccountStatus }) => void,
+        handler: (event: { payload: CodexRuntimeAuthStatus }) => void,
       ) => {
         expect(eventName).toBe("account-status-changed");
         handler({ payload: signedInStatus });

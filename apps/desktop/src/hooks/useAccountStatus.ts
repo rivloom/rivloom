@@ -7,7 +7,7 @@ import {
   onAccountStatusChanged,
   startChatgptLogin,
 } from "../lib/accountBridge";
-import type { AccountStatus } from "../types/account";
+import type { CodexRuntimeAuthStatus } from "../types/account";
 
 export type AccountAction =
   | "refresh"
@@ -15,15 +15,15 @@ export type AccountAction =
   | "cancelLogin"
   | "logout";
 
-const checkingStatus: AccountStatus = { state: "checking" };
-const unavailableStatus: AccountStatus = {
+const checkingStatus: CodexRuntimeAuthStatus = { state: "checking" };
+const unavailableStatus: CodexRuntimeAuthStatus = {
   state: "error",
   message: "账号状态暂时不可用。",
   retryable: true,
 };
 
 export function useAccountStatus(runtimeConnected: boolean) {
-  const [status, setStatus] = useState<AccountStatus>(checkingStatus);
+  const [status, setStatus] = useState<CodexRuntimeAuthStatus>(checkingStatus);
   const [pendingAction, setPendingAction] = useState<AccountAction | null>(
     null,
   );
@@ -109,7 +109,7 @@ export function useAccountStatus(runtimeConnected: boolean) {
   const runAction = useCallback(
     async (
       action: AccountAction,
-      call: () => Promise<AccountStatus>,
+      call: () => Promise<CodexRuntimeAuthStatus>,
     ): Promise<void> => {
       if (!connectedRef.current || actionTokenRef.current !== null) {
         return;

@@ -17,7 +17,7 @@ use super::tests::request;
 use super::tests::request_without_params;
 use super::tests::signed_in_response;
 use super::tests::spawn_status_task;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 use crate::app_server::ConnectionError;
 
 #[test]
@@ -27,13 +27,19 @@ fn explicit_cancel_cleans_the_attempt_and_rereads_backend_truth() {
         cancel_response(),
         signed_out_response(),
     ]);
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
 
-    assert_eq!(service.cancel_account_login(), AccountStatus::SignedOut);
+    assert_eq!(
+        service.cancel_account_login(),
+        CodexRuntimeAuthStatus::SignedOut
+    );
     assert_eq!(
         (service.status(), connection.requests()),
         (
-            AccountStatus::SignedOut,
+            CodexRuntimeAuthStatus::SignedOut,
             vec![
                 browser_start_request(),
                 cancel_request("cancel-me"),
@@ -51,10 +57,16 @@ fn failed_cancel_keeps_a_cleanup_handle_for_a_later_retry() {
         cancel_response(),
         signed_out_response(),
     ]);
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
 
     assert_eq!(service.cancel_account_login(), login_unavailable_error());
-    assert_eq!(service.cancel_account_login(), AccountStatus::SignedOut);
+    assert_eq!(
+        service.cancel_account_login(),
+        CodexRuntimeAuthStatus::SignedOut
+    );
     assert_eq!(
         connection.requests(),
         vec![
@@ -75,7 +87,7 @@ fn successful_logout_is_parameterless_and_rereads_backend_truth() {
     ]);
     assert_eq!(service.refresh(), signed_in_status());
 
-    assert_eq!(service.logout_account(), AccountStatus::SignedOut);
+    assert_eq!(service.logout_account(), CodexRuntimeAuthStatus::SignedOut);
     assert_eq!(
         connection.requests(),
         vec![
@@ -109,11 +121,14 @@ fn logout_after_canceling_a_pending_login_never_retains_temporary_values() {
         cancel_response(),
         Err(ConnectionError::Timeout),
     ]);
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
 
     assert_eq!(
         (service.logout_account(), service.status()),
-        (logout_error(), AccountStatus::Checking)
+        (logout_error(), CodexRuntimeAuthStatus::Checking)
     );
     assert_eq!(
         connection.requests(),
@@ -145,8 +160,11 @@ fn stale_logout_failures_return_the_reconnected_account_status() {
     };
     let old_logout = next_request(&request_receiver, "old account/logout should arrive");
     let current_connection = Arc::new(FakeConnection::new(vec![signed_out_response()]));
-    assert_eq!(service.connect(current_connection), AccountStatus::Checking);
-    assert_eq!(service.refresh(), AccountStatus::SignedOut);
+    assert_eq!(
+        service.connect(current_connection),
+        CodexRuntimeAuthStatus::Checking
+    );
+    assert_eq!(service.refresh(), CodexRuntimeAuthStatus::SignedOut);
     old_logout.respond(
         request_without_params("account/logout"),
         Err(ConnectionError::Timeout),
@@ -154,7 +172,10 @@ fn stale_logout_failures_return_the_reconnected_account_status() {
 
     assert_eq!(
         (logout.wait("stale logout should finish"), service.status()),
-        (AccountStatus::SignedOut, AccountStatus::SignedOut)
+        (
+            CodexRuntimeAuthStatus::SignedOut,
+            CodexRuntimeAuthStatus::SignedOut
+        )
     );
 }
 
@@ -183,7 +204,7 @@ fn logout_holds_the_login_gate_through_its_follow_up_read() {
     .respond(account_read_request(), signed_out_response());
     assert_eq!(
         logout.wait("logout should finish"),
-        AccountStatus::SignedOut
+        CodexRuntimeAuthStatus::SignedOut
     );
     next_request(&request_receiver, "browser login should run after logout").respond(
         browser_start_request(),
@@ -192,7 +213,7 @@ fn logout_holds_the_login_gate_through_its_follow_up_read() {
 
     assert_eq!(
         login.wait("browser login should finish"),
-        AccountStatus::BrowserPending
+        CodexRuntimeAuthStatus::BrowserPending
     );
 }
 
@@ -209,7 +230,7 @@ fn confirmed_cancel_invalidates_an_older_account_read() {
     );
     assert_eq!(
         login.wait("browser login should finish"),
-        AccountStatus::BrowserPending
+        CodexRuntimeAuthStatus::BrowserPending
     );
 
     let stale_read = {
@@ -229,7 +250,7 @@ fn confirmed_cancel_invalidates_an_older_account_read() {
     );
     assert_eq!(
         (logout.wait("logout should fail"), service.status()),
-        (logout_error(), AccountStatus::Checking)
+        (logout_error(), CodexRuntimeAuthStatus::Checking)
     );
 
     stale_request.respond(account_read_request(), signed_in_response());
@@ -238,7 +259,10 @@ fn confirmed_cancel_invalidates_an_older_account_read() {
             stale_read.wait("stale account/read should finish"),
             service.status()
         ),
-        (AccountStatus::Checking, AccountStatus::Checking)
+        (
+            CodexRuntimeAuthStatus::Checking,
+            CodexRuntimeAuthStatus::Checking
+        )
     );
 }
 
@@ -249,7 +273,10 @@ fn successful_cancel_with_failed_reread_clears_temporary_values() {
         cancel_response(),
         Err(ConnectionError::Timeout),
     ]);
-    assert_eq!(service.start_browser_login(), AccountStatus::BrowserPending);
+    assert_eq!(
+        service.start_browser_login(),
+        CodexRuntimeAuthStatus::BrowserPending
+    );
 
     assert_eq!(
         (service.cancel_account_login(), service.status()),
@@ -302,15 +329,15 @@ pub(super) fn signed_out_response() -> Result<Value, ConnectionError> {
     Ok(json!({ "account": null, "requiresOpenaiAuth": true }))
 }
 
-fn signed_in_status() -> AccountStatus {
-    AccountStatus::SignedIn {
+fn signed_in_status() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::SignedIn {
         email: None,
         plan_type: "plus".to_string(),
     }
 }
 
-fn logout_error() -> AccountStatus {
-    AccountStatus::Error {
+fn logout_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: "无法退出 ChatGPT，请重试。".to_string(),
         retryable: true,
     }

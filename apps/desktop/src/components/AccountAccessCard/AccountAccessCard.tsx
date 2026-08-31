@@ -8,13 +8,13 @@ import {
 
 import { zhCN } from "../../content/zh-CN";
 import type { AccountAction } from "../../hooks/useAccountStatus";
-import type { AccountStatus } from "../../types/account";
+import type { CodexRuntimeAuthStatus } from "../../types/account";
 
 import styles from "./AccountAccessCard.module.css";
 
 type AccountAccessCardProps = {
   runtimeConnected: boolean;
-  status: AccountStatus;
+  status: CodexRuntimeAuthStatus;
   pendingAction: AccountAction | null;
   onRefresh: () => void;
   onStartChatgptLogin: () => void;
@@ -22,7 +22,7 @@ type AccountAccessCardProps = {
   onLogout: () => void;
 };
 
-type AccountTone = AccountStatus["state"] | "unavailable";
+type AccountTone = CodexRuntimeAuthStatus["state"] | "unavailable";
 
 export function AccountAccessCard({
   runtimeConnected,
@@ -282,7 +282,7 @@ function AccountButton({
 
 function getAccountView(
   runtimeConnected: boolean,
-  status: AccountStatus,
+  status: CodexRuntimeAuthStatus,
 ): AccountView {
   if (!runtimeConnected) {
     return {

@@ -3,12 +3,12 @@ use std::sync::PoisonError;
 use serde_json::Value;
 
 use super::AccountService;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 
 const LOGOUT_UNAVAILABLE_MESSAGE: &str = "无法退出 ChatGPT，请重试。";
 
 impl AccountService {
-    pub(crate) fn cancel_account_login(&self) -> AccountStatus {
+    pub(crate) fn cancel_account_login(&self) -> CodexRuntimeAuthStatus {
         let _operation = self
             .inner
             .login_operation
@@ -20,7 +20,7 @@ impl AccountService {
         self.refresh()
     }
 
-    pub(crate) fn logout_account(&self) -> AccountStatus {
+    pub(crate) fn logout_account(&self) -> CodexRuntimeAuthStatus {
         let _operation = self
             .inner
             .login_operation
@@ -60,8 +60,8 @@ impl AccountService {
     }
 }
 
-fn logout_unavailable_error() -> AccountStatus {
-    AccountStatus::Error {
+fn logout_unavailable_error() -> CodexRuntimeAuthStatus {
+    CodexRuntimeAuthStatus::Error {
         message: LOGOUT_UNAVAILABLE_MESSAGE.to_string(),
         retryable: true,
     }

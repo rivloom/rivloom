@@ -7,7 +7,7 @@ use tauri_plugin_shell::ShellExt;
 
 use super::AccountCommand;
 use super::AccountService;
-use super::AccountStatus;
+use super::CodexRuntimeAuthStatus;
 use super::login::UrlOpener;
 use super::service::AccountStatusObserver;
 use crate::app_server::log_diagnostic;
@@ -33,7 +33,7 @@ impl AccountState {
         self.service.clone()
     }
 
-    pub(crate) fn execute(&self, command: AccountCommand) -> AccountStatus {
+    pub(crate) fn execute(&self, command: AccountCommand) -> CodexRuntimeAuthStatus {
         self.service.execute_command(command)
     }
 }
@@ -57,7 +57,7 @@ struct AccountStatusEventEmitter {
 }
 
 impl AccountStatusObserver for AccountStatusEventEmitter {
-    fn on_status(&self, status: &AccountStatus) {
+    fn on_status(&self, status: &CodexRuntimeAuthStatus) {
         if let Err(error) = self
             .app_handle
             .emit_to("main", ACCOUNT_STATUS_CHANGED_EVENT, status)

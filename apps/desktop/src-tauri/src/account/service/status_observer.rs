@@ -3,7 +3,7 @@ use std::sync::PoisonError;
 
 use super::AccountService;
 use super::AccountServiceState;
-use crate::account::types::AccountStatus;
+use crate::account::types::CodexRuntimeAuthStatus;
 use crate::app_server::ConnectionControl;
 use crate::app_server::process::ConnectionObserver;
 
@@ -12,7 +12,7 @@ use crate::app_server::process::ConnectionObserver;
 /// Callbacks are serialized. Implementations must return promptly, must not re-enter account status
 /// publication, and must not retain or derive unexposed protocol payloads.
 pub(crate) trait AccountStatusObserver: Send + Sync {
-    fn on_status(&self, status: &AccountStatus);
+    fn on_status(&self, status: &CodexRuntimeAuthStatus);
 }
 
 #[cfg(test)]
@@ -20,17 +20,17 @@ pub(super) struct NoopAccountStatusObserver;
 
 #[cfg(test)]
 impl AccountStatusObserver for NoopAccountStatusObserver {
-    fn on_status(&self, _status: &AccountStatus) {}
+    fn on_status(&self, _status: &CodexRuntimeAuthStatus) {}
 }
 
 impl AccountService {
-    pub(crate) fn publish_status(&self, status: &AccountStatus) {
+    pub(crate) fn publish_status(&self, status: &CodexRuntimeAuthStatus) {
         self.publish_status_if(status, |state| &state.status == status);
     }
 
     fn publish_status_if(
         &self,
-        status: &AccountStatus,
+        status: &CodexRuntimeAuthStatus,
         is_current: impl FnOnce(&AccountServiceState) -> bool,
     ) {
         let mut published_status = self

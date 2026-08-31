@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AccountStatus } from "../types/account";
+import type { CodexRuntimeAuthStatus } from "../types/account";
 
 const bridgeMocks = vi.hoisted(() => ({
   cancelAccountLogin: vi.fn(),
@@ -15,15 +15,17 @@ vi.mock("../lib/accountBridge", () => bridgeMocks);
 
 import { useAccountStatus } from "./useAccountStatus";
 
-const checkingStatus: AccountStatus = { state: "checking" };
-const signedOutStatus: AccountStatus = { state: "signedOut" };
-const browserPendingStatus: AccountStatus = { state: "browserPending" };
-const signedInStatus: AccountStatus = {
+const checkingStatus: CodexRuntimeAuthStatus = { state: "checking" };
+const signedOutStatus: CodexRuntimeAuthStatus = { state: "signedOut" };
+const browserPendingStatus: CodexRuntimeAuthStatus = {
+  state: "browserPending",
+};
+const signedInStatus: CodexRuntimeAuthStatus = {
   state: "signedIn",
   email: "user@example.com",
   planType: "plus",
 };
-const unavailableStatus: AccountStatus = {
+const unavailableStatus: CodexRuntimeAuthStatus = {
   state: "error",
   message: "账号状态暂时不可用。",
   retryable: true,
@@ -72,15 +74,15 @@ describe("useAccountStatus", () => {
   });
 
   it("does not let a stale initial read replace a newer event", async () => {
-    let emitStatus: ((status: AccountStatus) => void) | undefined;
-    let finishRead: ((status: AccountStatus) => void) | undefined;
+    let emitStatus: ((status: CodexRuntimeAuthStatus) => void) | undefined;
+    let finishRead: ((status: CodexRuntimeAuthStatus) => void) | undefined;
     bridgeMocks.onAccountStatusChanged.mockImplementation(async (listener) => {
       emitStatus = listener;
       return vi.fn();
     });
     bridgeMocks.getAccountStatus.mockImplementation(
       () =>
-        new Promise<AccountStatus>((resolve) => {
+        new Promise<CodexRuntimeAuthStatus>((resolve) => {
           finishRead = resolve;
         }),
     );
@@ -99,7 +101,7 @@ describe("useAccountStatus", () => {
   });
 
   it("does not let a rejected stale read replace a newer event", async () => {
-    let emitStatus: ((status: AccountStatus) => void) | undefined;
+    let emitStatus: ((status: CodexRuntimeAuthStatus) => void) | undefined;
     let failRead: ((error: Error) => void) | undefined;
     bridgeMocks.onAccountStatusChanged.mockImplementation(async (listener) => {
       emitStatus = listener;
@@ -107,7 +109,7 @@ describe("useAccountStatus", () => {
     });
     bridgeMocks.getAccountStatus.mockImplementation(
       () =>
-        new Promise<AccountStatus>((_resolve, reject) => {
+        new Promise<CodexRuntimeAuthStatus>((_resolve, reject) => {
           failRead = reject;
         }),
     );
@@ -154,7 +156,7 @@ describe("useAccountStatus", () => {
   });
 
   it("ignores events from a listener after that connection is gone", async () => {
-    let emitOldStatus: ((status: AccountStatus) => void) | undefined;
+    let emitOldStatus: ((status: CodexRuntimeAuthStatus) => void) | undefined;
     bridgeMocks.onAccountStatusChanged
       .mockImplementationOnce(async (listener) => {
         emitOldStatus = listener;
@@ -180,10 +182,10 @@ describe("useAccountStatus", () => {
   });
 
   it("deduplicates account actions while one is pending", async () => {
-    let finishLogin: ((status: AccountStatus) => void) | undefined;
+    let finishLogin: ((status: CodexRuntimeAuthStatus) => void) | undefined;
     bridgeMocks.startChatgptLogin.mockImplementation(
       () =>
-        new Promise<AccountStatus>((resolve) => {
+        new Promise<CodexRuntimeAuthStatus>((resolve) => {
           finishLogin = resolve;
         }),
     );

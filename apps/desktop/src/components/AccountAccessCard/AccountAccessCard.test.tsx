@@ -3,15 +3,15 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AccountAction } from "../../hooks/useAccountStatus";
-import type { AccountStatus } from "../../types/account";
+import type { CodexRuntimeAuthStatus } from "../../types/account";
 import { AccountAccessCard } from "./AccountAccessCard";
 
-const defaultStatus: AccountStatus = { state: "signedOut" };
+const defaultStatus: CodexRuntimeAuthStatus = { state: "signedOut" };
 
 function renderAccount(
   options: {
     runtimeConnected?: boolean;
-    status?: AccountStatus;
+    status?: CodexRuntimeAuthStatus;
     pendingAction?: AccountAction | null;
   } = {},
 ) {

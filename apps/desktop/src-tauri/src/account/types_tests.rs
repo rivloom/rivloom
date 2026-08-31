@@ -1,23 +1,23 @@
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
-use super::AccountStatus;
+use super::CodexRuntimeAuthStatus;
 
 #[test]
-fn account_statuses_expose_only_the_frontend_contract() {
+fn codex_runtime_auth_statuses_expose_only_the_frontend_contract() {
     let statuses = [
-        AccountStatus::Checking,
-        AccountStatus::SignedOut,
-        AccountStatus::BrowserPending,
-        AccountStatus::SignedIn {
+        CodexRuntimeAuthStatus::Checking,
+        CodexRuntimeAuthStatus::SignedOut,
+        CodexRuntimeAuthStatus::BrowserPending,
+        CodexRuntimeAuthStatus::SignedIn {
             email: None,
             plan_type: "plus".to_string(),
         },
-        AccountStatus::SignedIn {
+        CodexRuntimeAuthStatus::SignedIn {
             email: Some("user@example.com".to_string()),
             plan_type: "pro".to_string(),
         },
-        AccountStatus::Error {
+        CodexRuntimeAuthStatus::Error {
             message: "账号状态暂时不可用。".to_string(),
             retryable: true,
         },
