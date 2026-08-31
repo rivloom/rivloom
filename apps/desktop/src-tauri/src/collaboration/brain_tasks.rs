@@ -12,7 +12,7 @@ const MAX_REPLAYS: usize = 256;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct TaskRecord {
-    source: Message,
+    pub(super) source: Message,
     pub(super) status: TaskStatus,
     pub(super) revision: u64,
 }

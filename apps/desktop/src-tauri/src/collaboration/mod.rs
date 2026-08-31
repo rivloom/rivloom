@@ -3,6 +3,7 @@ mod brain_tasks;
 mod credential;
 mod invitation;
 mod protocol;
+mod reconcile;
 mod snapshot;
 mod storage;
 

@@ -16,6 +16,7 @@ directory, which is reserved for upstream Codex documentation.
   local validation, security review and deferred runtime/transport gates.
 - [R3.2 verification](plans/2026-08-31-runtime-host-r3-2-verification.md) records invitation and node
   credential boundaries, revocation evidence and the remaining secure transport requirements.
+- [R3.4 verification](plans/2026-08-31-runtime-host-r3-4-verification.md) tracks Node reconciliation and secure transport.
 - [R3.3 verification](plans/2026-08-31-runtime-host-r3-3-verification.md) tracks Brain authority,
   persistence and recovery without implying that the two-machine gate has passed.
 - [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)
