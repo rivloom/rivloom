@@ -29,6 +29,16 @@ macro_rules! string_enum {
 pub(super) struct Message(Envelope);
 
 impl Message {
+    pub(super) fn with_revision(&self, revision: u64) -> Result<Self, ProtocolError> {
+        let mut envelope = self.0.clone();
+        envelope.revision = revision;
+        Self::try_from(envelope)
+    }
+
+    pub(super) fn is_receipt_from(&self, node_id: &str) -> bool {
+        matches!(&self.0.payload, Payload::RunReceipt(receipt) if receipt.content.node_id == node_id)
+    }
+
     pub(super) fn admission(&self) -> Admission<'_> {
         let payload = match &self.0.payload {
             Payload::Node(node) => PayloadView::Node {
