@@ -1,20 +1,19 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`ProjectWorkspace > forwards retry and bounded pagination without exposing cwd > populated workspace 1`] = `
+exports[`ProjectWorkspace > keeps local tasks visible while Runtime drafting is offline > offline task workspace 1`] = `
 [
-  "←返回项目首页Local projectRivloom Demo项目目录C:\\workspaces\\a-very-long-folder-name\\rivloom-demo＋新建会话Project threads项目会话查看该项目已有的会话摘要；选择会话不会恢复聊天或发送模型请求。1 / 500会话列表暂时不可用。重新加载会话○检查本地项目会话可继续只读取归一化元数据，不载入历史消息。<time>加载更多会话",
+  "←返回项目首页Local task hostRivloom Demo项目目录C:\\workspaces\\a-very-long-folder-name\\rivloom-demo!核心服务连接中断已保存任务仍可查看和起草；连接恢复前不能启动新的 Codex Run。01Local task / bounded input把目标交给本机 CodexRivloom 会为这次执行创建隔离 worktree，并只把下面的有界任务正文交给 Runtime。27 / 1,000-byte run guard任务目标21 / 4,096 bytes离线保留的草稿描述可验收的结果，不要粘贴 Token、密钥或无界日志。执行约束（每行一条）0 / 32最多 32 条；每条 1 KiB，合计 8 KiB。空行会被忽略。↗只发送目标与约束连接 Codex Runtime 后即可启动▶启动本地任务Bounded task history本地任务只保留有界状态、回执和 Patch 元数据。1 个任务02 / Local run检查本地任务闭环不修改 codex-rs运行中停止这次运行请在本机 Codex 完成审批；远端不能代为批准。Bounded events最近状态#1Run 已登记Verifiable output运行回执等待本机审批RunReceipt 会在运行进入可核实终态后出现。",
   "←返回项目首页 | enabled",
-  "＋新建会话 | enabled",
-  "重新加载会话 | enabled",
-  "查看会话 检查本地项目会话，状态可继续 | enabled",
-  "加载更多会话 | enabled",
+  "▶启动本地任务 | disabled",
+  "停止这次运行 | enabled",
 ]
 `;
 
-exports[`ProjectWorkspace > keeps the selected project visible through a runtime disconnect > disconnected workspace 1`] = `
+exports[`ProjectWorkspace > wires the exact stop correlation and sanitized task errors > active task workspace 1`] = `
 [
-  "←返回项目首页Local projectRivloom Demo项目目录C:\\workspaces\\a-very-long-folder-name\\rivloom-demo＋新建会话!核心服务连接中断项目元数据仍保留在本页；连接恢复后可重新加载会话。",
+  "←返回项目首页Local task hostRivloom Demo项目目录C:\\workspaces\\a-very-long-folder-name\\rivloom-demo01Local task / bounded input把目标交给本机 CodexRivloom 会为这次执行创建隔离 worktree，并只把下面的有界任务正文交给 Runtime。6 / 1,000-byte run guard任务目标0 / 4,096 bytes描述可验收的结果，不要粘贴 Token、密钥或无界日志。执行约束（每行一条）0 / 32最多 32 条；每条 1 KiB，合计 8 KiB。空行会被忽略。↗只发送目标与约束项目绝对路径、Runtime 凭据与完整日志不会进入任务正文。▶启动本地任务Codex Runtime 尚未就绪。Bounded task history本地任务只保留有界状态、回执和 Patch 元数据。1 个任务02 / Local run检查本地任务闭环不修改 codex-rs运行中停止这次运行请在本机 Codex 完成审批；远端不能代为批准。Bounded events最近状态#1Run 已登记Verifiable output运行回执等待本机审批RunReceipt 会在运行进入可核实终态后出现。",
   "←返回项目首页 | enabled",
-  "＋新建会话 | disabled",
+  "▶启动本地任务 | disabled",
+  "停止这次运行 | enabled",
 ]
 `;
