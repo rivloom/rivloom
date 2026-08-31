@@ -1,6 +1,6 @@
 # Rivloom Runtime Host R3.2 验证记录
 
-日期：2026-08-31。状态：R3.2a 节点凭证核心已实现；邀请兑换进行中，Gate R3 未通过。
+日期：2026-08-31。状态：R3.2 本地核心实现并通过自动化验证，PR 待审查合并；Gate R3 未通过。
 
 ## 基线与拆分
 
@@ -8,8 +8,10 @@
 `C:/project/opencohive/.worktrees/r3-2-node-credentials`。主目录旧 main 和其原有
 `apps/desktop/src-tauri/Cargo.toml` 改动保持不动。
 
-- R3.2a：`codex/r3-2-node-credentials`，秘密类型、凭证签发、连接认证和撤销准入。
-- R3.2b：后续独立 PR，短期一次性邀请与成员/Node 兑换；两个 PR 各自低于 800 行。
+- R3.2a：[Draft PR #69](https://github.com/rivloom/rivloom/pull/69)，
+  `codex/r3-2-node-credentials` → main，`adea227c0b`，561 changed lines。
+- R3.2b：`codex/r3-2-single-use-invitations` → `codex/r3-2-node-credentials`，
+  短期一次性邀请与成员/Node 兑换。先合并 #69，再将此 PR 重定到 main；各自低于 800 行。
 
 ## 凭证边界
 
@@ -34,6 +36,26 @@
 [Zeroizing](https://docs.rs/zeroize/1.9.0/zeroize/struct.Zeroizing.html)，没有自创加密协议。
 Bearer secret 被窃取后在撤销/过期前仍可使用；这些内存类型不提供硬件设备证明。
 
+## 邀请与成员兑换
+
+- 邀请固定绑定 Brain，10 分钟有效，最多 32 个 pending；到期边界拒绝兑换。
+  创建时清理已过期条目，取消邀请立即移除其 verifier。时钟回退不会复活过期邀请。
+- 邀请 ID 与 secret 分别生成；Brain 仅保留 verifier 与有效时间，不保留邀请明文。
+  只有凭证签发成功后才消费邀请；错误 secret、错 Brain、非法输入或容量不足不会花掉邀请。
+  同一邀请再次兑换被拒绝，不重复生成成员/Node 凭证。
+- 兑换在 Brain 生成独立的 member/Node ID，绑定申请者提供的有界 identity/device ID，
+  只返回 member 角色；接口没有客户端指定 member/Node ID 或 owner 角色的字段。
+  identity ID、device ID 和昵称是自报标签，邀请持有证明不等于真实身份或设备证明。
+- 邀请 secret 不能当 Node secret 使用。重新邀请产生新成员与新 Node；同一 identity 标签
+  的新成员不复用已撤销成员，旧会话仍被拒绝。成员撤销不等于永久封禁人的自报 identity。
+- core 的 `&mut` 串行兑换只保证内存操作顺序。R3.3 必须原子持久化邀请消费、成员和凭证，
+  防止崩溃后重复使用；响应丢失不会重发明文 secret，须由管理者撤销孤立成员后重新邀请。
+  开放 join endpoint 前需补身份核对/邀请安全交付，不能只凭网络地址或昵称批准加入。
+
+一次性、限时、随机和安全保存的 token 生命周期参考
+[OWASP token 指引](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)；
+这里是成员邀请，不声称实现了完整密码恢复流程或已验收网络认证。
+
 ## 自动化证据
 
 首次回归使错误 secret、到期边界和撤销旧 session 三项测试失败，修复后通过。
@@ -41,8 +63,20 @@ Bearer secret 被窃取后在撤销/过期前仍可使用；这些内存类型�
 锁文件只新增 subtle 2.6.1、zeroize 1.9.0；getrandom 0.3.4 已在锁中，无无关依赖升级。
 初次离线解析受缓存冲突影响；在沙箱外获取 registry 元数据后正常解析，未降低 TLS 校验。
 
-R3.2a 在 `apps/desktop` 通过 `just test-rust`（231 + 4）、`just check`（95 + build）、
-普通 `--tests` 与 `--lib --features test-tauri-commands` 两组 Clippy（均 `-D warnings`）。
+R3.2b 首次回归使重复兑换、错误 proof 和过期邀请三项测试失败，修复后通过。
+覆盖取消/回退、跨 Brain、secret 脱敏、输入与 pending 上限、签发失败保留邀请、
+重新邀请与旧会话撤销，共新增 7 项邀请测试；R3.2 总计新增 14 项行为测试。
+
+在 `apps/desktop` 分别验证：
+
+| 检查 | R3.2a | R3.2b |
+| --- | --- | --- |
+| `just test-rust` | 231 + 4 | 238 + 4 |
+| `just check` | 95 + TS/Vite build | 95 + TS/Vite build |
+| Clippy `--tests -- -D warnings` | 通过 | 通过 |
+| Clippy `--lib --features test-tauri-commands -- -D warnings` | 通过 | 通过 |
+| 桌面格式检查、diff、本地文档链接与范围检查 | 通过 | 通过 |
+
 最后通过桌面 `cargo fmt` / `--check` 和 `git diff --check`，未在格式化后重跑同一批测试。
 测试没有调用真实模型；前端快照仅换行状态刷新，没有内容变化。
 仓库要求的 `just bazel-lock-update` 和 `codex-rs` 下 `just fmt` 均已尝试，
@@ -61,3 +95,5 @@ R3.1 数据消息不能携带 secret；认证交换须独立走加密控制通�
 Gate R4/Windows 可用性发布前必须补齐。当前仍为 `on-request + auto_review`。
 没有修改 codex-rs、恢复 CI、处理 #37/#38、引入第二 Runtime/Marketplace/Skill Directory，
 没有使用子 agent。
+
+下一步：审查并顺序合并两张 R3.2 PR，主干复验后开始 R3.3 Brain 状态存储、presence 与修订号。
