@@ -1,6 +1,6 @@
 mod account;
 mod app_server;
-// Local Brain hosting is explicit; Node onboarding and collaboration UI remain separate work.
+// Brain/Node lifecycle is explicit; collaboration UI and real-device gates remain separate work.
 #[allow(dead_code)]
 mod collaboration;
 mod identity;
@@ -164,6 +164,16 @@ fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send
         collaboration::commands::initialize_local_brain,
         collaboration::commands::start_local_brain,
         collaboration::commands::stop_local_brain,
+        collaboration::node_commands::get_node_status,
+        collaboration::node_commands::join_brain,
+        collaboration::node_commands::connect_brain_owner,
+        collaboration::node_commands::connect_brain,
+        collaboration::node_commands::refresh_brain,
+        collaboration::node_commands::disconnect_brain,
+        collaboration::node_commands::list_brain_members,
+        collaboration::node_commands::create_brain_invitation,
+        collaboration::node_commands::cancel_brain_invitation,
+        collaboration::node_commands::revoke_brain_member,
         project::commands::list_recent_projects,
         project::commands::select_project,
         project::commands::remove_recent_project,
@@ -239,6 +249,13 @@ pub fn run() {
             if !app.manage(brain_state) {
                 return Err(std::io::Error::other("Brain state was already managed").into());
             }
+            let node_state = collaboration::node_commands::DesktopNodeState::new(
+                app_data.join("collaboration").join("node-client"),
+            )
+            .map_err(|_| std::io::Error::other("Node state could not be initialized"))?;
+            if !app.manage(node_state) {
+                return Err(std::io::Error::other("Node state was already managed").into());
+            }
             let task_state = task::commands::create_task_state(
                 app.handle().clone(),
                 app_data.join("tasks").join("tasks-v1.json"),
@@ -264,6 +281,14 @@ pub fn run() {
         .expect("failed to build Rivloom desktop application");
 
     app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) && let Some(state) =
+            app_handle.try_state::<collaboration::node_commands::DesktopNodeState>()
+        {
+            state.shutdown();
+        }
         if matches!(
             event,
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit

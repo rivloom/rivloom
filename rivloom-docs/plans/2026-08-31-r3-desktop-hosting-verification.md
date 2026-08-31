@@ -90,7 +90,7 @@ setup 只注册状态，不创建 Brain 或监听；ExitRequested/Exit 关闭服
 ## 未完成的 Gate
 
 - 两台真实 Windows 设备经受支持私网加入同一 Brain，并检查数据边界。
-- 尚缺 Node 加入/连接/邀请的桌面接线，以及信任核对、启动/停止、凭证失效和初始化失败恢复 UI。
+- Node 加入/连接/邀请接线已在后续 #86–#89 实现待合并；信任核对、启动/停止、凭证失效和初始化失败恢复 UI 仍缺。
   信任确认 API 不能代替用户真实核对；不得自动确认指纹或扩大权限。
 - R2-FU1 elevated 多 Home 共存与真实执行/取消验收继续延期，Gate R4 前必须补齐。
 - 产品保持 `on-request + auto_review`；不恢复 CI，不处理 #37/#38，不接第二 Runtime、Marketplace 或 Skill Directory。
