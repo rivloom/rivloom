@@ -38,6 +38,10 @@ export type PatchArtifactMetadata = {
   sha256: string | null;
 };
 
+export type PatchArtifact = PatchArtifactMetadata & {
+  patch: string | null;
+};
+
 export type RunReceiptOutcome =
   | "success"
   | "failed"
@@ -102,3 +106,23 @@ export type TaskRecord = {
   runs: RunRecord[];
   events: TaskEvent[];
 };
+
+export type LocalTaskRun = {
+  task: TaskRecord;
+  runId: string;
+};
+
+export type LocalTaskUpdate = {
+  projectId: string;
+  task: TaskRecord;
+  patch: PatchArtifact | null;
+};
+
+export type TaskCommandError =
+  | "invalidTask"
+  | "taskUnavailable"
+  | "projectUnavailable"
+  | "identityUnavailable"
+  | "runtimeUnavailable"
+  | "runUnavailable"
+  | "taskCapacityReached";
