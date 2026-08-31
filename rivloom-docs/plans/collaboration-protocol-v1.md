@@ -1,6 +1,6 @@
 # Rivloom Collaboration Protocol v1
 
-状态：R3.1–R3.3 已合并复验，2026-08-31；R3.4 后端已本机验证、待合并；Gate R3 未通过。
+状态：R3.1–R3.4 后端已合并复验，2026-08-31；Gate R3 未通过。
 本协议属于 Rivloom，不复用 App Server 原始消息，也不修改本地 R2 存储格式。
 
 ## 范围与入口
