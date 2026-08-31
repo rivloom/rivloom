@@ -48,7 +48,7 @@ changed lines。中间本地 branch 继续作为可回滚 checkpoint 保留。
 | R2.5h   | [#61](https://github.com/rivloom/rivloom/pull/61) | `codex/r2-task-frontend-bridge`   | `codex/r2-task-run-copy`          |           661 | `feat(desktop): add bounded task composer and run copy` |
 | R2.5i   | [#63](https://github.com/rivloom/rivloom/pull/63) | `codex/r2-task-run-copy`          | `codex/r2-task-run-ui`            |           757 | `feat(desktop): render bounded task run receipts`       |
 | R2.5j   | [#64](https://github.com/rivloom/rivloom/pull/64) | `codex/r2-task-run-ui`            | `codex/r2-task-workspace-cleanup` |           698 | `feat(desktop): make local tasks the project workflow`  |
-| R2 Gate | [#66](https://github.com/rivloom/rivloom/pull/66) | `codex/r2-task-workspace-cleanup` | `codex/r2-gate-docs`              |           671 | `fix(desktop): bound task runtime and record R2 gates`   |
+| R2 Gate | [#66](https://github.com/rivloom/rivloom/pull/66) | `codex/r2-task-workspace-cleanup` | `codex/r2-gate-docs`              |           786 | `fix(desktop): bound task runtime and record R2 gates`   |
 
 ## 创建与合并纪律
 

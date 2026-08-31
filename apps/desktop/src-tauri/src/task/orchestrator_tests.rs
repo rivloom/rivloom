@@ -102,6 +102,51 @@ fn one_local_codex_run_uses_an_isolated_thread_and_persists_a_verifiable_receipt
 }
 
 #[test]
+fn uncertain_runs_and_unavailable_patch_bodies_retain_the_worktree() {
+    for (contents, outcome, patch_state) in [
+        (
+            b"keep me\n".to_vec(),
+            RunReceiptOutcome::OutcomeUnknown,
+            PatchArtifactState::Complete,
+        ),
+        (
+            vec![b'x'; 512 * 1024 + 1],
+            RunReceiptOutcome::Success,
+            PatchArtifactState::TooLarge,
+        ),
+        (
+            vec![0xff],
+            RunReceiptOutcome::Success,
+            PatchArtifactState::UnsupportedEncoding,
+        ),
+    ] {
+        let fixture = Fixture::new("goal", Ok(turn_response()));
+        let LocalCodexRunStart::Active(mut active) =
+            fixture.runner.start(fixture.request()).unwrap()
+        else {
+            panic!("run must become active");
+        };
+        let generated = PathBuf::from(active.worktree.cwd()).join("generated.txt");
+        fs::write(&generated, &contents).unwrap();
+        let completion = if outcome == RunReceiptOutcome::OutcomeUnknown {
+            finished(active.mark_disconnected().unwrap())
+        } else {
+            fixture.connection.terminal("completed");
+            poll_until_finished(&mut active)
+        };
+        assert_eq!(completion.patch.state, patch_state);
+        assert_eq!(
+            completion.cleanup,
+            WorktreeCleanup::Retained {
+                reason: WorktreeCleanupFailure::EvidenceIncomplete,
+            }
+        );
+        assert_eq!(fs::read(generated).unwrap(), contents);
+        assert!(!fixture.repository.join("generated.txt").exists());
+    }
+}
+
+#[test]
 fn runtime_failure_never_becomes_success() {
     let fixture = Fixture::new("goal", Ok(turn_response()));
     let LocalCodexRunStart::Active(mut active) = fixture.runner.start(fixture.request()).unwrap()

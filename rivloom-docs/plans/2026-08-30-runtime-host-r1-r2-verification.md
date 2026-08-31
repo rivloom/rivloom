@@ -204,10 +204,10 @@ Codex Home 的 `.sandbox-secrets`，也没有批准 Windows 安全提示。
 根据 [ADR-0008](../adr/0008-close-r2-with-deferred-windows-runtime-validation.md)，R2 作为
 实现里程碑已接受收口。真实 Runtime 未通过项保留为 `R2-FU1`；后续安排如下：
 
-1. 开始 R3.1；`R2-FU1` 不阻塞 R3 实现，但必须在接受 Gate R4 和对外宣称 Windows 本地任务
-   闭环可用前完成。不提前开发第二 Runtime、Marketplace 或 Skill Directory。
+1. 先完成本轮 R1/R2 PR 合并并在 `main` 验证，再开始 R3.1；`R2-FU1` 不阻塞 R3 实现，
+   但必须在接受 Gate R4 和对外宣称 Windows 本地任务闭环可用前完成；不提前开发第二 Runtime、Marketplace 或 Skill Directory。
 2. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；
-   前一项合并后再把下一项 base 改回 `main`。R3.1 可以在该 stack 继续审查期间开始。
+   前一项合并后再把下一项 base 改回 `main`。实现收口不等于 PR 已合并或主干交付完成。
 3. 处理 `R2-FU1` 时保留 elevated，执行 ADR-0007 的候选版本、独立测试环境和双 Home
    共存 Gate。当前所查配置和公开 setup API 没有账号名/凭据目录 override；这不是等待用户
    选择，而是已选路线的接入阻塞。不复用整个主 Codex Home，不复制或链接 `.sandbox-secrets`。
@@ -218,3 +218,15 @@ Codex Home 的 `.sandbox-secrets`，也没有批准 Windows 安全提示。
    审批、安全审查和独立 PR 条件；不得随 Runtime 升级静默切换。
 
 CI 继续保持暂停；本记录不以缺少 CI 失败邮件代替任何本地测试证据。
+
+## 10. 合并前复审（2026-08-31）
+
+- 修复结果未知、Patch 超限或编码不支持时仍强制清理 worktree 的问题：证据不完整时保留
+  worktree；新增真实临时仓库回归覆盖三种情况，确认改动仍在且原 checkout 不变。
+- 修复迟到的 start/stop 响应或事件覆盖较新终态的问题：按事件序号拒绝旧 Task 快照，
+  三条前端回归均先复现失败，再验证修复通过。
+- 修复后 `just test-rust`：212 项 Rust 测试及 4 项 feature-gated project command 测试通过；
+  `just check`：21 个文件、95 项前端测试及 TypeScript/Vite 构建通过；两组 Clippy 均通过。
+- 桌面 `cargo fmt` 与 `git diff --check` 通过；根目录 `just fmt` 因本机失效的 Python
+  启动器未能执行，不把该项记为通过；未修改全局 Python 配置或 `codex-rs` 源码。
+- 以上为 Gate 分支合并前证据；PR 合并及最新 `main` 验证仍须另行确认。

@@ -21,6 +21,7 @@ use super::types::TaskSpec;
 use super::worktree::TaskWorktree;
 use super::worktree::TaskWorktreeManager;
 use super::worktree::WorktreeCleanup;
+use super::worktree::WorktreeCleanupFailure;
 use super::worktree::WorktreeError;
 use crate::app_server::ConnectionControl;
 use crate::app_server::ConnectionError;
@@ -332,7 +333,13 @@ fn finish_run(
     })
     .map_err(|_| TaskRunError::InvalidRequest)?;
     let run = tasks.finalize_run(receipt)?;
-    let cleanup = worktree.cleanup();
+    let cleanup = if outcome == RunReceiptOutcome::OutcomeUnknown || patch.patch.is_none() {
+        WorktreeCleanup::Retained {
+            reason: WorktreeCleanupFailure::EvidenceIncomplete,
+        }
+    } else {
+        worktree.cleanup()
+    };
     Ok(LocalCodexRunCompletion {
         run,
         patch,

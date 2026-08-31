@@ -194,4 +194,50 @@ describe("useTasks", () => {
     expect(bridgeMocks.startLocalTask).not.toHaveBeenCalled();
     expect(result.current.tasks[0]?.status).toBe("running");
   });
+
+  it.each(["start", "stop", "event"] as const)(
+    "does not let a stale %s result overwrite a newer terminal event",
+    async (source) => {
+      const running = task("task-a");
+      const completed = task("task-a", "awaitingReview");
+      completed.events = [
+        {
+          sequence: 1,
+          kind: {
+            type: "taskStatusChanged",
+            from: "running",
+            to: "awaitingReview",
+          },
+        },
+      ];
+      let listener!: (update: LocalTaskUpdate) => void;
+      bridgeMocks.listLocalTasks.mockResolvedValue([running]);
+      bridgeMocks.onLocalTaskChanged.mockImplementation(async (callback) => {
+        listener = callback;
+        return vi.fn();
+      });
+      const complete = () =>
+        listener({ projectId: "project-a", task: completed, patch: null });
+      bridgeMocks.startLocalTask.mockImplementation(async () => {
+        complete();
+        return { task: running, runId: "run-task-a" };
+      });
+      bridgeMocks.stopLocalTask.mockImplementation(async () => {
+        complete();
+        return running;
+      });
+      const { result } = renderHook(() => useTasks("project-a", true));
+      await waitFor(() => expect(result.current.tasks).toEqual([running]));
+      await act(async () => {
+        if (source === "start") await result.current.startTask("goal", []);
+        else if (source === "stop")
+          await result.current.stopTask("task-a", "run-task-a");
+        else {
+          complete();
+          listener({ projectId: "project-a", task: running, patch: null });
+        }
+      });
+      expect(result.current.tasks).toEqual([completed]);
+    },
+  );
 });

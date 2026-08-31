@@ -384,6 +384,7 @@ pub(crate) enum WorktreeCleanup {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorktreeCleanupFailure {
+    EvidenceIncomplete,
     InvalidTarget,
     GitUnavailable,
     GitRejected,
