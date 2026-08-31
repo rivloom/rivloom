@@ -45,6 +45,18 @@ pub(super) trait SecretBackend {
     fn remove(&self, target: &str) -> Result<(), VaultError>;
 }
 
+impl<B: SecretBackend> SecretBackend for std::sync::Arc<B> {
+    fn read(&self, target: &str) -> Result<Option<Zeroizing<Vec<u8>>>, VaultError> {
+        (**self).read(target)
+    }
+    fn write_new(&self, target: &str, bytes: &[u8]) -> Result<(), VaultError> {
+        (**self).write_new(target, bytes)
+    }
+    fn remove(&self, target: &str) -> Result<(), VaultError> {
+        (**self).remove(target)
+    }
+}
+
 pub(super) struct NodeSecrets<B> {
     backend: B,
 }

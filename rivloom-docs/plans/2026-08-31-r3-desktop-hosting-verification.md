@@ -12,7 +12,7 @@ TypeScript/Vite、两组 Clippy 和桌面格式检查通过。原主目录旧 ma
 分批实现并逐批验证，每张 PR 小于 800 行：
 
 1. [PR #82](https://github.com/rivloom/rivloom/pull/82)，326 行：公开信任资料及独立指纹确认。
-2. 服务端 TLS 身份生成、OS 保护及严格恢复。
+2. [PR #83](https://github.com/rivloom/rivloom/pull/83)，483 行：服务端 TLS 身份生成、OS 保护及严格恢复。
 3. 使用受管本机目录和已保护身份，显式启动/停止 Brain 的桌面托管层。
 
 不自动启动网络服务，不配置防火墙或安装 Tailscale，不读取 Runtime 登录凭据。
@@ -52,6 +52,17 @@ loopback TLS 往返。310 + 4 Rust、95 前端 + build、两组 Clippy 和桌面
   必须执行的 Bazel 锁更新与上游格式化仍被既有 Python 启动器故障阻塞，MODULE.bazel.lock 未变。
 
 ## 必须保留的后续 Gate
+
+本机托管核心：显式 initialize 只写入全新 app-owned 目录；先提交 Brain，再保护 TLS/Node 凭据，
+最后以 create-new + sync 写入最多 12 KiB 的公开登记。没有跨文件/OS vault 的原子事务保证；
+中途失败保留现场并报告 Incomplete/错误，重复初始化拒绝覆盖，不删除既有 Brain 或自动重发凭据。
+登记缺失/损坏、凭据过期/丢失、设备或 owner 身份不匹配、证书变更均不能启动监听。
+start 使用 R1 本机 Identity、已登记私网地址和同一证书；stop 回收 listener/worker，
+正常重启仍使用同一 Brain 与 pin。initialize 和 app 启动都不自动监听；端口占用不会误报 Running。
+操作使用 try-lock 返回 Busy；应用退出等待当前操作完成，再关闭服务并阻止排队命令重新启动。
+核心新增 6 项行为测试，321 + 4 Rust、95 前端 + build、两组 Clippy、桌面格式通过。
+组合测试使用内存 vault 和真实 TCP/TLS；原生 vault 在上一批独立验证。此批尚未注册桌面命令。
+Linux/macOS 未运行原生验收；修正 Windows 专用测试导入的 cfg，不将本机通过外推到其他平台。
 
 - 两台真实 Windows 设备经受支持私网加入同一 Brain，并检查数据边界。
 - 明确的证书信任引导、启动/停止和凭证失效处理 UI；不得自动确认指纹或扩大权限。
