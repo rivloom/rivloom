@@ -1,3 +1,4 @@
+#[cfg(windows)]
 use super::super::secret_store::NativeVault;
 use super::super::test_support::Memory;
 use super::super::tls::TlsChannel;
