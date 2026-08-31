@@ -230,3 +230,12 @@ CI 继续保持暂停；本记录不以缺少 CI 失败邮件代替任何本地�
 - 桌面 `cargo fmt` 与 `git diff --check` 通过；根目录 `just fmt` 因本机失效的 Python
   启动器未能执行，不把该项记为通过；未修改全局 Python 配置或 `codex-rs` 源码。
 - 以上为 Gate 分支合并前证据；PR 合并及最新 `main` 验证仍须另行确认。
+
+## 11. 主干交付确认（2026-08-31）
+
+合并收尾记录已确认全部 20 个 PR 进入 `main`，最终提交 `8140f7c46b`；
+独立主干 worktree 的 212 项 Rust、4 项命令、95 项前端测试及构建、两组 Clippy 通过。
+桌面 Rustfmt 通过，仓库级 `just fmt` 仍受既有 Python 启动器故障影响。
+上文保留各历史阶段的原始证据与 PR 关系，不再表示等待合并。
+`R2-FU1` 仍未通过，ADR-0007/0008 及 Gate R4 前置不变；后续
+[R3.1 验证记录](2026-08-31-runtime-host-r3-1-verification.md) 不包含真实 Runtime 验收。

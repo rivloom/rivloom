@@ -1,6 +1,6 @@
 # Rivloom Collaboration Protocol v1
 
-状态：R3.1a 基础契约，2026-08-31。R3.1b 补齐 RunReceipt/Artifact 后才能宣称 R3.1 完成。
+状态：R3.1 实现与自动化验证完成，2026-08-31；分两张 PR 审查，尚未合并。
 本协议属于 Rivloom，不复用 App Server 原始消息，也不修改本地 R2 存储格式。
 
 ## 范围与入口
@@ -30,7 +30,7 @@ R3.1 只定义数据消息；不监听端口、不连接 Brain、不调用 Runti
 | `brainId` / `senderNodeId` | 所属 Brain 与本次发送 Node 的不透明 ID，不是认证证明 |
 | `sentAt` | Unix 秒整数，范围 0–253402300799，不接受毫秒或浮点数 |
 | `revision` | 0–9007199254740991；Node 发消息时为最后已应用的 Brain 修订号，Brain 发消息时为其权威修订号 |
-| `payload` | 当前支持 `identity`、`node`、`task`、`assignment`；无批量/嵌套消息 |
+| `payload` | 支持 `identity/node/task/assignment/runReceipt/artifact`；无批量/嵌套消息 |
 
 所有 ID（含幂等键、项目引用）为 1–128 个 ASCII 字母、数字、下划线或连字符。
 它们不能是 Windows/UNC/POSIX 路径。所有文字上限按 UTF-8 字节计算，非空文字不得全为空白。
@@ -56,6 +56,50 @@ Assignment 的 `decision` 使用 `state` 标签，不能混用不同分支字段
 
 `projectRef` 仅由执行 Node 在本机映射到已登记项目；`runKey` 绑定唯一一次执行。
 决定时间使用同一 Unix 秒范围。接收 Assignment 本身不会调用 Runtime。
+
+## Artifact 与共享 RunReceipt
+
+`artifact.data` 仅含以下元数据，字段顺序也是回执哈希中的顺序：
+`artifactId, taskId, runId, baselineCommit, state, limitBytes, byteCount, sha256`。
+前三者遵守 ID 限制；基线为 40 或 64 位小写十六进制 Git commit hash，不接受分支名或路径。
+`limitBytes` 固定 524288（512 KiB），是未来 Patch 正文上限，不是元数据消息上限。
+
+| `state` | `byteCount` / `sha256` |
+| --- | --- |
+| `empty` | 0 / 空字节串 SHA-256（`e3b0c442…b855`） |
+| `complete` / `unsupportedEncoding` | 1–524288 / 64 位小写十六进制 SHA-256 |
+| `tooLarge` | 两者均为 `null`；不可凭缺失数据猜测正文 |
+
+不携带正文、下载 URL 或本机存储路径。元数据不能证明内容可用或哈希正确；
+R5 读取真实正文后还须验证大小、hash、基线和可审查状态，不能自动接受超限/编码不支持产物。
+
+`runReceipt.data` 是 `{content, contentSha256}`。这是面向共享的独立 DTO，
+不是本地 R2 `RunReceipt` 的原样转发；本 PR 不改变 R2 存储或哈希，也不连接自动分享。
+
+| `content` 字段 | 限制 |
+| --- | --- |
+| `taskId, runId, nodeId, runtimeId, runtimeVersion` | ID 同上；Runtime 仅 `codex`，版本 ≤128 字节 |
+| `startedAt, finishedAt` | Unix 秒且结束不早于开始 |
+| `outcome, summary, failure` | 结果为 `success/failed/cancelled/outcomeUnknown`；摘要可空，非空时 ≤4096 字节 |
+| `tests` | `{state: notReported}` 或 `{state: reported, executions: [...]}`；执行项 `{name, exitCode}`，最多32项，名称每项≤256字节、合计≤4096字节，退出码为 i32 |
+| `artifact` | 上述元数据；Task/Run ID 必须与回执相同，最多一个 Patch |
+
+`failure` 仅接受 `executionFailed/connectionLost/policyDenied/invalidArtifact` 或 `null`，
+不得包含原始错误文本。成功/取消必须为 `null`，失败/未知必须非空。
+`notReported` 不等于测试通过；`success` 和空 Patch 也不能代替真实任务目标验收。
+
+`contentSha256` 是共享 content 的确定性 JSON 字节的 SHA-256，小写十六进制：
+
+1. 顶层 content 字段严格按上表顺序；tests 中先 `state` 再 `executions`，
+   执行项先 `name` 再 `exitCode`，artifact 按上文顺序；数组顺序不变。
+2. 使用紧凑 UTF-8 JSON，无空白、BOM 或换行；可空字段显式输出 `null`，整数十进制，
+   非 ASCII 字符不转义、不做 Unicode 规范化；字符串按 serde_json 的 JSON 转义规则编码。
+3. hash 不包括自身和消息封套，重发/重连即使改变封套，内容 hash 仍相同。
+   六种 golden payload 固定往返结构，并用固定 hash 锁定序列化顺序。
+
+接收方重算 hash 并验证内部关联。hash 是完整性检查，**不是身份认证、签名或执行证据**。
+R4 后续从本地回执生成经确认可分享的内容，再计算并持久化共享 hash；不得拿本地旧 hash
+给脱敏后的新 DTO 背书，也不能在重连时猜测或重新执行 Run。
 
 ## 授权、隐私与重放边界
 
@@ -85,7 +129,9 @@ R3.3/R3.4 必须按 Brain、已认证发送者及幂等键限定重放域；相�
   不修改全局 Python 配置或 `codex-rs`。
 - R3.1a 覆盖四种 golden 消息往返、未知版本/字段、重复字段、UTF-8 字节与集合边界、
   路径型 ID、越权字段、空分支额外字段和固定错误。
-- R3.1b 补齐共享回执、Artifact 元数据、内容哈希及本轮完整验证记录；之后才开始 R3.2。
+- R3.1b 已补齐共享回执/Artifact；所有字符串枚举只接受字符串，拒绝 Serde 对象别名。
+  详细证据及 PR 关系见 [R3.1 验证记录](2026-08-31-runtime-host-r3-1-verification.md)。
+- 下一步为 R3.2 邀请、成员与 Node 凭证；Gate R3 的两机认证/连接验收尚未通过。
 - R1/R2 已合入 `8140f7c46b`；`R2-FU1` 的 elevated 多 Home 共存与真实执行/取消验收
   仍延期，必须在 Gate R4 和 Windows 可用性发布前完成，不以协议测试冒充。
 - 不启用第二 Runtime、Marketplace、Skill Directory 或 CI，不处理旧 Draft PR #37/#38。

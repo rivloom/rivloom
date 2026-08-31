@@ -6,9 +6,9 @@
 - CI：按当前决定保持暂停
 - 2026-08-31：R2 实现里程碑按 [ADR-0008](../adr/0008-close-r2-with-deferred-windows-runtime-validation.md)
   接受收口；真实 Windows Runtime 验收转为 `R2-FU1`。这不表示下列 PR 已合并。
-- 2026-08-31 合并记录：前 19 项（#41 至 #64）已逐项合入 `main`，主干为
-  `d8639a6399`；[#66](https://github.com/rivloom/rivloom/pull/66) 是本轮最后交付 PR，
-  以其 GitHub `Merged` 状态确认全部 20 项落地；合并后的主干验证另作交付记录。
+- 2026-08-31 最终合并记录：全部 20 项已合入 `main`，收尾 PR 为
+  [#66](https://github.com/rivloom/rivloom/pull/66)，主干为 `8140f7c46b`，合并后验证通过。
+  本队列保留为历史；当前 R3.1 见 [验证记录](2026-08-31-runtime-host-r3-1-verification.md)。
 - 下表 Base 保留最初审查关系，实际最终合并目标均为 `main`。分支未删除；GitHub 原生
   stack 关联已按需解除，未因此改动代码。#44 的祖先关系修复使用普通 merge，文件树不变。
 

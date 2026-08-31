@@ -1,7 +1,27 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 const MAX_MESSAGE_BYTES: usize = 32 * 1024;
+const MAX_PATCH_BYTES: u64 = 512 * 1024;
 const MAX_REVISION: u64 = 9_007_199_254_740_991;
+const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+// Serde's derived unit enums also accept {"variant": null}; v1 only accepts strings.
+macro_rules! string_enum {
+    ($name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
+        #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+        enum $name { $(#[serde(rename = $wire)] $variant),+ }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                match String::deserialize(deserializer)?.as_str() {
+                    $($wire => Ok(Self::$variant),)+
+                    _ => Err(serde::de::Error::custom("Invalid collaboration enum")),
+                }
+            }
+        }
+    };
+}
 
 // Only Message crosses the boundary; Envelope is an unvalidated staging value.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -75,6 +95,8 @@ enum Payload {
     Node(Node),
     Task(Task),
     Assignment(Assignment),
+    RunReceipt(Receipt),
+    Artifact(Artifact),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -87,12 +109,10 @@ struct Identity {
     role: Role,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum Role {
-    Owner,
-    Member,
-}
+string_enum! { Role {
+    Owner => "owner",
+    Member => "member",
+} }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -105,19 +125,15 @@ struct Node {
     capabilities: Vec<Capability>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum RuntimeId {
-    Codex,
-}
+string_enum! { RuntimeId {
+    Codex => "codex",
+} }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum Capability {
-    TaskRun,
-    Interrupt,
-    Patch,
-}
+string_enum! { Capability {
+    TaskRun => "taskRun",
+    Interrupt => "interrupt",
+    Patch => "patch",
+} }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -130,26 +146,22 @@ struct Task {
     status: TaskStatus,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum ArtifactKind {
-    Patch,
-}
+string_enum! { ArtifactKind {
+    Patch => "patch",
+} }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum TaskStatus {
-    Draft,
-    Offered,
-    Accepted,
-    Running,
-    AwaitingReview,
-    Approved,
-    Rejected,
-    Cancelled,
-    Failed,
-    OutcomeUnknown,
-}
+string_enum! { TaskStatus {
+    Draft => "draft",
+    Offered => "offered",
+    Accepted => "accepted",
+    Running => "running",
+    AwaitingReview => "awaitingReview",
+    Approved => "approved",
+    Rejected => "rejected",
+    Cancelled => "cancelled",
+    Failed => "failed",
+    OutcomeUnknown => "outcomeUnknown",
+} }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -162,11 +174,9 @@ struct Assignment {
     decision: Decision,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum ExecutionPolicy {
-    ManagedWorktreeOffline,
-}
+string_enum! { ExecutionPolicy {
+    ManagedWorktreeOffline => "managedWorktreeOffline",
+} }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(
@@ -192,6 +202,79 @@ enum Decision {
         decided_by_member_id: String,
         decided_at: i64,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Artifact {
+    artifact_id: String,
+    task_id: String,
+    run_id: String,
+    baseline_commit: String,
+    state: ArtifactState,
+    limit_bytes: u64,
+    byte_count: Option<u64>,
+    sha256: Option<String>,
+}
+
+string_enum! { ArtifactState {
+    Empty => "empty",
+    Complete => "complete",
+    TooLarge => "tooLarge",
+    UnsupportedEncoding => "unsupportedEncoding",
+} }
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Receipt {
+    content: ReceiptContent,
+    content_sha256: String,
+}
+
+// Field order is part of the v1 receipt hash contract. See collaboration-protocol-v1.md.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReceiptContent {
+    task_id: String,
+    run_id: String,
+    node_id: String,
+    runtime_id: RuntimeId,
+    runtime_version: String,
+    started_at: i64,
+    finished_at: i64,
+    outcome: ReceiptOutcome,
+    summary: Option<String>,
+    failure: Option<Failure>,
+    tests: TestReport,
+    artifact: Artifact,
+}
+
+string_enum! { ReceiptOutcome {
+    Success => "success",
+    Failed => "failed",
+    Cancelled => "cancelled",
+    OutcomeUnknown => "outcomeUnknown",
+} }
+
+string_enum! { Failure {
+    ExecutionFailed => "executionFailed",
+    ConnectionLost => "connectionLost",
+    PolicyDenied => "policyDenied",
+    InvalidArtifact => "invalidArtifact",
+} }
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase", deny_unknown_fields)]
+enum TestReport {
+    NotReported {},
+    Reported { executions: Vec<TestExecution> },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TestExecution {
+    name: String,
+    exit_code: i32,
 }
 
 impl Payload {
@@ -257,7 +340,67 @@ impl Payload {
                 .all(|v| id(v))
                     && decision_valid
             }
+            Self::Artifact(value) => value.valid(),
+            Self::RunReceipt(value) => value.valid(),
         }
+    }
+}
+
+impl Artifact {
+    fn valid(&self) -> bool {
+        let state_valid = match self.state {
+            ArtifactState::Empty => {
+                self.byte_count == Some(0) && self.sha256.as_deref() == Some(EMPTY_SHA256)
+            }
+            ArtifactState::Complete | ArtifactState::UnsupportedEncoding => {
+                self.byte_count
+                    .is_some_and(|count| (1..=MAX_PATCH_BYTES).contains(&count))
+                    && self.sha256.as_deref().is_some_and(|value| hex(value, 64))
+            }
+            ArtifactState::TooLarge => self.byte_count.is_none() && self.sha256.is_none(),
+        };
+        [&self.artifact_id, &self.task_id, &self.run_id]
+            .into_iter()
+            .all(|v| id(v))
+            && (hex(&self.baseline_commit, 40) || hex(&self.baseline_commit, 64))
+            && self.limit_bytes == MAX_PATCH_BYTES
+            && state_valid
+    }
+}
+
+impl Receipt {
+    fn valid(&self) -> bool {
+        let content = &self.content;
+        let tests_valid = match &content.tests {
+            TestReport::NotReported {} => true,
+            TestReport::Reported { executions } => {
+                executions.len() <= 32
+                    && executions.iter().all(|test| text(&test.name, 256))
+                    && executions.iter().map(|test| test.name.len()).sum::<usize>() <= 4096
+            }
+        };
+        let outcome_valid = match content.outcome {
+            ReceiptOutcome::Success | ReceiptOutcome::Cancelled => content.failure.is_none(),
+            ReceiptOutcome::Failed | ReceiptOutcome::OutcomeUnknown => content.failure.is_some(),
+        };
+        [&content.task_id, &content.run_id, &content.node_id]
+            .into_iter()
+            .all(|v| id(v))
+            && text(&content.runtime_version, 128)
+            && timestamp(content.started_at)
+            && timestamp(content.finished_at)
+            && content.finished_at >= content.started_at
+            && content
+                .summary
+                .as_deref()
+                .is_none_or(|value| text(value, 4096))
+            && content.artifact.valid()
+            && content.task_id == content.artifact.task_id
+            && content.run_id == content.artifact.run_id
+            && tests_valid
+            && outcome_valid
+            && serde_json::to_vec(content)
+                .is_ok_and(|bytes| format!("{:x}", Sha256::digest(bytes)) == self.content_sha256)
     }
 }
 
@@ -271,6 +414,13 @@ fn id(value: &str) -> bool {
 
 fn text(value: &str, max_bytes: usize) -> bool {
     !value.trim().is_empty() && value.len() <= max_bytes
+}
+
+fn hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn timestamp(value: i64) -> bool {
