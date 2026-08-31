@@ -1,6 +1,7 @@
+use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RivloomIdentity {
     pub(crate) identity_id: String,
@@ -9,7 +10,7 @@ pub(crate) struct RivloomIdentity {
     pub(crate) brain_membership: Option<BrainMembershipSummary>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BrainMembershipSummary {
     pub(crate) brain_id: String,
@@ -17,7 +18,7 @@ pub(crate) struct BrainMembershipSummary {
     pub(crate) role: BrainMembershipRole,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum BrainMembershipRole {
     Owner,
