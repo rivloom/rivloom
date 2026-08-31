@@ -1,4 +1,5 @@
 mod artifact;
+mod local_state;
 mod orchestrator;
 mod receipt;
 mod service;
