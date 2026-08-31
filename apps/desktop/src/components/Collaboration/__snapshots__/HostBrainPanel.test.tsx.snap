@@ -1,0 +1,44 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`never offers reinitialization of faulted state or owner enrollment for an existing node > faulted hosting preserves evidence 1`] = `
+<p
+  class="_error_1ee605"
+  role="alert"
+>
+  本机 Brain 登记不完整或不可读取。已停止操作；保留现场，不能覆盖初始化。
+</p>
+`;
+
+exports[`only initializes an explicit address and does not auto-start or auto-connect > explicit private hosting setup 1`] = `
+<fieldset>
+  <label>
+    私网监听地址与端口
+    <input
+      maxlength="128"
+      placeholder="例如 192.168.1.20:7443"
+      required=""
+      value="192.168.1.20:7443"
+    />
+  </label>
+  <label>
+    TLS 服务器名称
+    <input
+      maxlength="253"
+      placeholder="例如 brain.local"
+      required=""
+      value="brain.local"
+    />
+  </label>
+  <p
+    class="_notice_1ee605"
+  >
+    使用本机实际拥有的 LAN / Tailscale 私网地址。127.0.0.1 只能本机连接，不能用于两设备验收。初始化会保存身份和 OS 凭证，不会自动开始监听。
+  </p>
+  <button
+    class="_button_1ee605"
+    type="submit"
+  >
+    初始化本机 Brain
+  </button>
+</fieldset>
+`;
