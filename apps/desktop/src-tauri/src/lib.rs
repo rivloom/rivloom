@@ -1,5 +1,8 @@
 mod account;
 mod app_server;
+// R3.1 freezes the wire contract; transport consumers arrive in R3.2-R3.4.
+#[allow(dead_code)]
+mod collaboration;
 mod identity;
 mod project;
 #[allow(dead_code)]

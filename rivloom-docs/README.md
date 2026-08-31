@@ -10,6 +10,8 @@ directory, which is reserved for upstream Codex documentation.
   is the current authoritative product and architecture design.
 - [Runtime Host Transition Implementation Plan](plans/2026-08-30-runtime-host-transition-plan.md)
   defines the active milestones and delivery gates.
+- [Collaboration protocol v1](plans/collaboration-protocol-v1.md) defines the bounded R3.1 wire contract
+  and the authorization boundaries for subsequent Brain/Node work.
 - [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)
   records the current local implementation, automated evidence, publication state, and remaining
   native smoke checks.
