@@ -1,3 +1,4 @@
+mod brain;
 mod credential;
 mod invitation;
 mod protocol;
