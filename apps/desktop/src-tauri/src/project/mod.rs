@@ -6,4 +6,5 @@ mod storage;
 mod thread_service;
 mod types;
 
+pub(crate) use service::ResolvedProject;
 pub(crate) use state::ProjectState;

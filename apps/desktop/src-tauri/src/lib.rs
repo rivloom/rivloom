@@ -2,6 +2,8 @@ mod account;
 mod app_server;
 mod identity;
 mod project;
+#[allow(dead_code)]
+mod runtime;
 pub mod runtime_status;
 #[allow(dead_code)]
 mod task;
