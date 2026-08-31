@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 
 import { AccountAccessCard } from "../components/AccountAccessCard/AccountAccessCard";
 import { AppShell } from "../components/AppShell/AppShell";
+import { CollaborationCard } from "../components/Collaboration/CollaborationCard";
 import { IdentityCard } from "../components/IdentityCard/IdentityCard";
 import { ProjectAccessCard } from "../components/ProjectAccessCard/ProjectAccessCard";
 import { ProjectWorkspace } from "../components/ProjectWorkspace/ProjectWorkspace";
 import { ServiceStatusCard } from "../components/ServiceStatusCard/ServiceStatusCard";
 import { zhCN } from "../content/zh-CN";
 import { useAccountStatus } from "../hooks/useAccountStatus";
+import { useCollaboration } from "../hooks/useCollaboration";
 import { useIdentity } from "../hooks/useIdentity";
 import { useRecentProjects } from "../hooks/useRecentProjects";
 import { useRuntimeStatus } from "../hooks/useRuntimeStatus";
@@ -18,6 +20,8 @@ import styles from "./App.module.css";
 export function App() {
   const { retry, retrying, status: runtimeStatus } = useRuntimeStatus();
   const identity = useIdentity();
+  const identityReady = identity.state.state === "ready";
+  const collaboration = useCollaboration(identityReady);
   const runtimeConnected = runtimeStatus.state === "connected";
   const account = useAccountStatus(runtimeConnected);
   const signedIn = account.status.state === "signedIn";
@@ -87,6 +91,10 @@ export function App() {
               state={identity.state}
               pendingAction={identity.pendingAction}
               onRefresh={identity.refresh}
+            />
+            <CollaborationCard
+              controller={collaboration}
+              identityReady={identityReady}
             />
             <section
               className={styles.runtimeSection}

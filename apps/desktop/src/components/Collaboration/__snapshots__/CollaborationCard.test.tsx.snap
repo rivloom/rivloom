@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`keeps recovery and unknown state read-only and never offers enrollment there > recovery cannot re-enroll 1`] = `
+<p
+  class="_error_1ee605"
+>
+  登记已保留，需要显式恢复。恢复流程尚未开放；不会覆盖登记或重发加入。
+</p>
+`;

@@ -95,7 +95,7 @@ transport / credential / rejected / unavailable。UI 不得对 uncertain Join �
 
 ## 剩余工作与保留限制
 
-Node service 和连接/加入/邀请命令已接线，UI 仍待实现。所有网络操作显式触发，不自动确认信任、重新加入、
+Node service 和连接/加入/邀请命令已接线；[协作 UI](2026-08-31-r3-collaboration-ui-verification.md) 已实现，分批 PR 待合并。所有网络操作显式触发，不自动确认信任、重新加入、
 重试管理操作或调用 Runtime。邀请 UI 需要短时、一次性呈现 secret，禁止写入持久化状态、日志和错误。
 TLS/Node 凭证过期与不完整初始化的恢复流程、真实两 Windows 设备验收仍未完成。
 Runtime capability announcement 的桌面接线尚未暴露；此批不猜测或自动发布 Runtime 能力。

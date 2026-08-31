@@ -4,6 +4,13 @@
 独立 worktree `C:/project/opencohive/.worktrees/r3-collaboration-ui`；原主目录旧 main 和未提交修改不动。
 Node 桌面 #86–#89 已按精确 Head 普通合并，独立主干验证见 Node 验证记录。
 
+协作 UI 已实现并接入总览；分为六张小 PR，仍待按依赖顺序合并，Gate R3 未通过。
+[桥接 #90](https://github.com/rivloom/rivloom/pull/90) 459 行 →
+[状态 #91](https://github.com/rivloom/rivloom/pull/91) 358 行 →
+[信任 #92](https://github.com/rivloom/rivloom/pull/92) 574 行 →
+[托管 #93](https://github.com/rivloom/rivloom/pull/93) 354 行 →
+[成员 #94](https://github.com/rivloom/rivloom/pull/94) 464 行 → 总览接线（本批）。
+
 ## 类型、桥接和输入边界
 
 14 个桌面命令的 TypeScript 参数/结果与 Rust DTO 对齐，不增加命令或 Runtime 调用。
@@ -15,6 +22,24 @@ descriptor 输入最多 8 KiB，邀请输入最多 2 KiB；拒绝错误结构、
 5 项新增行为测试覆盖命令接线、无隐式重试、指纹替换、Brain 绑定、输入上限、邀请期限和错误脱敏。
 
 ## 验证及保留限制
+
+第六批：总览分为本机身份、Brain 协作、Codex Runtime 三个区域。协作只等待本机身份，
+不等待 Runtime 登录；R1 空 membership 字段不再显示为“尚未加入”，连接状态以 Node 投影为准。
+初次接入须选择加入或托管；恢复/未知状态不开放重新登记，owner 管理入口取自认证目录。
+App 组合断言、三个 Card 行为测试及已审阅恢复/身份快照覆盖接线与权限边界。
+最终 120 前端测试、TypeScript/Vite、334 + 12 Rust、cargo check、两组 Clippy 通过。
+最后自审补上本机身份失效时的即时禁用，避免等待状态 hook 清理期间仍显示可操作按钮。
+全量前端格式检查的剩余 71 项均来自主干既有换行差异；四个本批修改文件已局部格式化。
+换行兼容格式检查通过，仓库级 Python 启动器故障仍未解决且不计通过。
+
+浏览器检查使用真实组件/状态 hook + 明确标注的内存 bridge 夹具，没有 Tauri、vault、TLS 或设备连接。
+在默认 1280×720 和窄窗口 390×844 检查布局；窄窗口恢复页无横向溢出，64 位指纹完整换行。
+检查公开预览不自动确认、错误指纹阻止调用并清空输入、显式加入只调用一次、普通成员无邀请权限、
+owner 邀请显示/隐藏/撤销、具名成员撤销、初始化不自动监听、本机 owner 指纹初始为空及恢复禁用登记。
+浏览器 console 无 warn/error。邀请仅使用固定合成测试值；截图隐藏邀请内容，不包含真实密钥。
+本地证据保存在 `C:/project/opencohive/.worktrees/r3-ui-visual-checks`，不进入产品资源。
+“清空”指移除界面与活动状态中的内容，不承诺 JavaScript 堆内存安全擦除；用户手动复制的内容由用户管理。
+Windows 保留端口 1340–1439，预览改用 127.0.0.1:5179；未修改端口保留、安全设置或 Tauri 配置。
 
 第五批：成员目录标注最后对账修订与历史在线状态；普通成员无管理按钮。撤销须再次确认具体成员，
 已撤销成员和 owner 不提供撤销入口。邀请只保留在组件内，隐藏/离开/到期清空 secret；
@@ -43,7 +68,7 @@ cargo check、桌面格式与换行兼容格式检查通过。
 前端 `pnpm format --end-of-line auto` 通过；默认格式检查保留既有 75 文件换行提示，
 未做整树格式化。仓库级 `just fmt` 因既有 Python 启动器故障退出 101，不计为通过。
 
-界面组件、操作状态机和浏览器验证将在后续小 PR 中接入；此批没有可见 UI 变化。
+浏览器夹具与自动测试不替代真实桌面/两机验收；没有声明真实邀请兑换、凭证持久性或 TLS 设备接入已通过。
 不恢复 CI、不修改 codex-rs、不处理 #37/#38、不进入 R4/第二 Runtime/Marketplace/Skill Directory。
 两台真实 Windows 设备 Gate R3、凭证过期/不完整登记恢复、桌面 capability announcement 仍待完成。
 R2-FU1 elevated 多 Home 共存及真实执行/取消/边界/cleanup 继续延期；不可据自动测试宣称已通过。

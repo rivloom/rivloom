@@ -10,6 +10,7 @@ const hookMocks = vi.hoisted(() => ({
   useRecentProjects: vi.fn(),
   useRuntimeStatus: vi.fn(),
   useTasks: vi.fn(),
+  useCollaboration: vi.fn(),
 }));
 
 vi.mock("../hooks/useAccountStatus", () => ({
@@ -26,6 +27,9 @@ vi.mock("../hooks/useRuntimeStatus", () => ({
 }));
 vi.mock("../hooks/useTasks", () => ({
   useTasks: hookMocks.useTasks,
+}));
+vi.mock("../hooks/useCollaboration", () => ({
+  useCollaboration: hookMocks.useCollaboration,
 }));
 
 import { App } from "./App";
@@ -111,6 +115,12 @@ describe("App", () => {
     hookMocks.useIdentity.mockReturnValue(identity());
     hookMocks.useRecentProjects.mockReturnValue(projects());
     hookMocks.useTasks.mockReturnValue(tasks());
+    hookMocks.useCollaboration.mockReturnValue({
+      snapshot: null,
+      pending: null,
+      error: null,
+      reload: vi.fn(),
+    });
   });
 
   it("exposes product navigation and the main workspace", () => {
@@ -143,7 +153,11 @@ describe("App", () => {
       screen.getByRole("heading", { name: "Codex Runtime" }),
     ).toBeInTheDocument();
     expect(screen.getByText("本机用户")).toBeInTheDocument();
-    expect(screen.getByText("尚未加入 Brain")).toBeInTheDocument();
+    expect(screen.getByText("连接状态见下方协作区")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Brain 协作" }),
+    ).toBeInTheDocument();
+    expect(hookMocks.useCollaboration).toHaveBeenCalledWith(true);
 
     hookMocks.useRuntimeStatus.mockReturnValue({
       retry: vi.fn(),
@@ -156,7 +170,7 @@ describe("App", () => {
     rerender(<App />);
 
     expect(screen.getByText("Codex Runtime 已登录")).toBeInTheDocument();
-    expect(screen.getByText("尚未加入 Brain")).toBeInTheDocument();
+    expect(screen.getByText("连接状态见下方协作区")).toBeInTheDocument();
 
     hookMocks.useIdentity.mockReturnValue(
       identity({ brainId: "brain-1", memberId: "member-1", role: "owner" }),

@@ -29,10 +29,10 @@ describe("IdentityCard", () => {
       screen.getByRole("heading", { name: "Rivloom 身份" }),
     ).toBeInTheDocument();
     expect(screen.getByText("本机用户")).toBeInTheDocument();
-    expect(screen.getByText("尚未加入 Brain")).toBeInTheDocument();
-    expect(screen.getByText("尚未加入 Brain").closest("dl")).toMatchSnapshot(
-      "local identity details without Brain",
-    );
+    expect(screen.getByText("连接状态见下方协作区")).toBeInTheDocument();
+    expect(
+      screen.getByText("连接状态见下方协作区").closest("dl"),
+    ).toMatchSnapshot("local identity details without Brain");
   });
 
   it("offers a retry when identity storage is unavailable", async () => {
