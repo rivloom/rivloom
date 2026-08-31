@@ -14,7 +14,7 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 
 1. [PR #75](https://github.com/rivloom/rivloom/pull/75)，545 行：成员可见数据投影及分页增量对账。
 2. [PR #76](https://github.com/rivloom/rivloom/pull/76)，548 行：Node 原子对账、断线状态及重试。
-3. 受支持 TLS、证书身份固定和有界帧传输。
+3. [PR #77](https://github.com/rivloom/rivloom/pull/77)，738 行：TLS、证书身份固定和有界传输。
 4. Node 凭证的本机保护，不落明文 secret。
 5. Brain/Node 认证服务接线、限速和纵向传输测试。
 
@@ -57,6 +57,18 @@ R3.4c：使用 [Rustls 0.23.43](https://docs.rs/rustls/0.23.43/rustls/struct.Con
 测试证书生成器固定 rcgen 0.14.7；0.14.10 要求 Rust 1.88，未提升项目 MSRV。
 Cargo.lock 只添加 TLS/测试所需依赖，没有升级既有包；所需 Bazel 锁更新仍因既有 Python
 启动器失败，MODULE.bazel.lock 未变。此测试不等于私网两机或真实 Codex Gate 通过。
+
+R3.4d：Node 凭证使用 Windows 的
+[Credential Manager](https://learn.microsoft.com/en-us/windows/win32/api/wincred/ns-wincred-credentialw)
+generic credential、当前用户/本机持久作用域，Rivloom 不写普通明文 secret 文件。
+槽名为完整、大小写敏感 binding 的 SHA-256，避免 Windows 不区分大小写造成身份碰撞；
+读写仅限 Rivloom 命名空间和 1 KiB，恢复核对版本、binding、时间和 secret 格式。
+已发现的槽不会覆盖，进程内写入串行；不宣称对其他同账号恶意进程的跨进程 CAS 防护。
+没有凭证枚举、Runtime Token 读取、自动轮换或明文 fallback；非 Windows 原生后端明确不可用。
+接收、序列化及 OS 读回缓冲清零，secret 的 Debug 脱敏。持久层和已建立 TLS 帧才允许显式 secret 字段。
+新增 5 项测试；沙箱内原生写入失败，正常用户会话的完整 286 + 4 Rust 测试通过，
+其中真实 OS 往返只创建随机命名合成槽并清理。95 前端 + build、两组 Clippy、桌面格式通过。
+未把沙箱内失败或未运行的 Linux/macOS OS vault 记为通过；Bazel/上游格式化既有故障仍保留。
 
 首版统一使用应用层 TLS（即使运行于 Tailscale），避免把私网 IP 当作加密/身份认证证明。
 根证书、服务端名称和预先可信获取的证书 pin 均需校验；不做首次连接自动信任，失败不降级明文。
