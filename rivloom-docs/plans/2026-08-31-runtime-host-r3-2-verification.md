@@ -10,8 +10,11 @@
 
 - R3.2a：[Draft PR #69](https://github.com/rivloom/rivloom/pull/69)，
   `codex/r3-2-node-credentials` → main，`adea227c0b`，561 changed lines。
-- R3.2b：`codex/r3-2-single-use-invitations` → `codex/r3-2-node-credentials`，
+- R3.2b：[Draft PR #70](https://github.com/rivloom/rivloom/pull/70)，实现提交 `8b91ef3951`，
+  `codex/r3-2-single-use-invitations` → `codex/r3-2-node-credentials`，
   短期一次性邀请与成员/Node 兑换。先合并 #69，再将此 PR 重定到 main；各自低于 800 行。
+
+两张 PR 已完成串行自审；未注册远端入口，凭证 gate 不替代后续角色与 Task 归属检查。
 
 ## 凭证边界
 
