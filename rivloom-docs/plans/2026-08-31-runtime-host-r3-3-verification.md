@@ -14,7 +14,8 @@ R3.3 从该最新 origin/main 创建 `C:/project/opencohive/.worktrees/r3-3-brai
 
 1. R3.3a：[PR #71](https://github.com/rivloom/rivloom/pull/71)，403 行；
    凭证/邀请状态的有界、严格恢复，拒绝重复键、错误身份关联、TTL 和撤销不一致。
-2. R3.3b：Brain 成员/Node/presence 和唯一修订号。
+2. R3.3b：[PR #72](https://github.com/rivloom/rivloom/pull/72)，610 行；
+   Brain 成员/Node/presence 和唯一修订号。
 3. R3.3c：Task 状态、发送者限定的重放与乱序保护。
 4. R3.3d：单写者、原子快照和失败恢复；超过 800 行时继续拆开审查单元。
 
@@ -45,6 +46,18 @@ bootstrap 的 owner 只能在本机创建；首版没有远端自授 owner、own
 恢复入口不隐式建立活连接；持久服务打开时必须执行 Restart presence 清理并提交。
 新增 5 项 Brain 测试，`just test-rust` 247 + 4、`just check` 95 + build、
 两组 Clippy（`-D warnings`）、桌面格式与 diff 检查通过。原子提交仍由后续存储 PR 完成。
+
+R3.3c 增加受认证发送者限定的消息准入，只接受匹配自身绑定的 Node 公告/心跳及新 draft Task。
+Identity/owner、Assignment、RunReceipt、Artifact 和远端非 draft Task 不能借此入口写入权威状态。
+Task 后续状态只能由受信本地协调逻辑推进；R4 必须先校验接受、Run 和回执关联，此函数本身不执行 Runtime。
+幂等域为当前 Brain + 已认证 Node + key，比较规范序列化 payload 的 SHA-256；
+messageId、sentAt、最后已见 revision 不参与业务 fingerprint，重试返回原修订号。
+认证和撤销检查始终在缓存命中之前执行；重复心跳不更新 lastSeen，可信时钟仍可前进。
+新操作要求当前 Brain revision；同键不同 payload、重复 Task ID、乱序和越权声明均拒绝。
+最多 64 Tasks、256 条重放记录；达到容量拒绝新操作，不自动驱逐历史。尚无清理/压缩产品入口。
+恢复保留 Task 状态和重放结果；presence 过期/重启不会推断 Task 成败，也不会重新调用 Runtime。
+新增 7 项 Task/重放行为测试，`just test-rust` 254 + 4、`just check` 95 + build、
+两组 Clippy（`-D warnings`）、桌面格式与 diff 检查通过。
 
 `R2-FU1` Windows elevated 多 Home 共存和真实执行/取消、边界/cleanup 验收继续延期，
 Gate R4/Windows 可用性发布前必须补齐。当前仍 `on-request + auto_review`。

@@ -8,9 +8,9 @@ const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495
 
 // Serde's derived unit enums also accept {"variant": null}; v1 only accepts strings.
 macro_rules! string_enum {
-    ($name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
+    ($visibility:vis $name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
         #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-        enum $name { $(#[serde(rename = $wire)] $variant),+ }
+        $visibility enum $name { $(#[serde(rename = $wire)] $variant),+ }
 
         impl<'de> Deserialize<'de> for $name {
             fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -24,11 +24,43 @@ macro_rules! string_enum {
 }
 
 // Only Message crosses the boundary; Envelope is an unvalidated staging value.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(try_from = "Envelope")]
 pub(super) struct Message(Envelope);
 
 impl Message {
+    pub(super) fn admission(&self) -> Admission<'_> {
+        let payload = match &self.0.payload {
+            Payload::Node(node) => PayloadView::Node {
+                node_id: &node.node_id,
+                member_id: &node.member_id,
+                device_id: &node.device_id,
+            },
+            Payload::Task(task) => PayloadView::Task {
+                task_id: &task.task_id,
+                member_id: &task.created_by_member_id,
+                status: &task.status,
+            },
+            Payload::Identity(_)
+            | Payload::Assignment(_)
+            | Payload::RunReceipt(_)
+            | Payload::Artifact(_) => PayloadView::Unsupported,
+        };
+        Admission {
+            brain_id: &self.0.brain_id,
+            sender_node_id: &self.0.sender_node_id,
+            key: &self.0.idempotency_key,
+            revision: self.0.revision,
+            payload,
+        }
+    }
+
+    pub(super) fn payload_hash(&self) -> Result<[u8; 32], ProtocolError> {
+        let bytes =
+            serde_json::to_vec(&self.0.payload).map_err(|_| ProtocolError::InvalidMessage)?;
+        Ok(Sha256::digest(bytes).into())
+    }
+
     pub(super) fn decode(bytes: &[u8]) -> Result<Self, ProtocolError> {
         if bytes.len() > MAX_MESSAGE_BYTES {
             return Err(ProtocolError::MessageTooLarge);
@@ -43,6 +75,28 @@ impl Message {
         }
         Ok(bytes)
     }
+}
+
+pub(super) struct Admission<'a> {
+    pub(super) brain_id: &'a str,
+    pub(super) sender_node_id: &'a str,
+    pub(super) key: &'a str,
+    pub(super) revision: u64,
+    pub(super) payload: PayloadView<'a>,
+}
+
+pub(super) enum PayloadView<'a> {
+    Node {
+        node_id: &'a str,
+        member_id: &'a str,
+        device_id: &'a str,
+    },
+    Task {
+        task_id: &'a str,
+        member_id: &'a str,
+        status: &'a TaskStatus,
+    },
+    Unsupported,
 }
 
 impl TryFrom<Envelope> for Message {
@@ -150,7 +204,7 @@ string_enum! { ArtifactKind {
     Patch => "patch",
 } }
 
-string_enum! { TaskStatus {
+string_enum! { pub(super) TaskStatus {
     Draft => "draft",
     Offered => "offered",
     Accepted => "accepted",
