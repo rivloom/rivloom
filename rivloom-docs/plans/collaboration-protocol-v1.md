@@ -1,6 +1,6 @@
 # Rivloom Collaboration Protocol v1
 
-状态：R3.1 实现与自动化验证完成，2026-08-31；分两张 PR 审查，尚未合并。
+状态：R3.1 #67/#68 已合并，2026-08-31；R3.2 也已合并复验，R3.3 实现中。
 本协议属于 Rivloom，不复用 App Server 原始消息，也不修改本地 R2 存储格式。
 
 ## 范围与入口
@@ -131,7 +131,8 @@ R3.3/R3.4 必须按 Brain、已认证发送者及幂等键限定重放域；相�
   路径型 ID、越权字段、空分支额外字段和固定错误。
 - R3.1b 已补齐共享回执/Artifact；所有字符串枚举只接受字符串，拒绝 Serde 对象别名。
   详细证据及 PR 关系见 [R3.1 验证记录](2026-08-31-runtime-host-r3-1-verification.md)。
-- 下一步为 R3.2 邀请、成员与 Node 凭证；Gate R3 的两机认证/连接验收尚未通过。
+- R3.2 已实现邀请、成员与 Node 凭证；R3.3 实现状态权威和存储，
+  Gate R3 的两机认证/连接验收尚未通过。
 - R1/R2 已合入 `8140f7c46b`；`R2-FU1` 的 elevated 多 Home 共存与真实执行/取消验收
   仍延期，必须在 Gate R4 和 Windows 可用性发布前完成，不以协议测试冒充。
 - 不启用第二 Runtime、Marketplace、Skill Directory 或 CI，不处理旧 Draft PR #37/#38。

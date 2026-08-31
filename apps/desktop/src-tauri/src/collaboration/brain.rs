@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use super::brain_tasks::{ReplayRecord, TaskRecord};
+use super::protocol::Message;
 use serde::{Deserialize, Serialize};
 
 use super::credential::{
@@ -35,6 +37,7 @@ pub(super) struct NodeRecord {
     pub(super) last_seen_at: Option<i64>,
     pub(super) online: bool,
     pub(super) revision: u64,
+    pub(super) announcement: Option<Message>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -51,6 +54,9 @@ pub(super) struct BrainSnapshot {
     pub(super) members: BTreeMap<String, MemberRecord>,
     #[serde(deserialize_with = "super::snapshot::unique_map::<_, _, 64>")]
     pub(super) nodes: BTreeMap<String, NodeRecord>,
+    #[serde(deserialize_with = "super::snapshot::unique_map::<_, _, 64>")]
+    pub(super) tasks: BTreeMap<String, TaskRecord>,
+    pub(super) replays: Vec<ReplayRecord>,
 }
 
 /// In-memory authority; durable callers must commit the entire mutation before returning its result.
@@ -104,6 +110,7 @@ impl Brain {
                 member_id: owner_member_id.clone(),
                 device_id: owner.device_id.into(),
                 last_seen_at: None,
+                announcement: None,
                 online: false,
                 revision: 1,
             },
@@ -120,6 +127,8 @@ impl Brain {
                     invitations,
                     members,
                     nodes,
+                    tasks: BTreeMap::new(),
+                    replays: Vec::new(),
                 },
             },
             credential,
@@ -203,6 +212,7 @@ impl Brain {
                 member_id: binding.member_id.clone(),
                 device_id: binding.device_id.clone(),
                 last_seen_at: None,
+                announcement: None,
                 online: false,
                 revision,
             },
@@ -395,7 +405,7 @@ impl Brain {
                 return Err(BrainError::Invalid);
             }
         }
-        Ok(())
+        self.validate_tasks_and_replays()
     }
 }
 

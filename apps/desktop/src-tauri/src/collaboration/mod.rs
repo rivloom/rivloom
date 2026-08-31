@@ -1,4 +1,5 @@
 mod brain;
+mod brain_tasks;
 mod credential;
 mod invitation;
 mod protocol;
