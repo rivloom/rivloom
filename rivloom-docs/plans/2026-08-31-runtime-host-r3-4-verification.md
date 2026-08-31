@@ -13,7 +13,7 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 继续拆为每张少于 800 行的依赖 PR，完成各批测试和串行审查后再进入下一批：
 
 1. [PR #75](https://github.com/rivloom/rivloom/pull/75)，545 行：成员可见数据投影及分页增量对账。
-2. Node 连接状态、原子应用对账与断线保守处理。
+2. [PR #76](https://github.com/rivloom/rivloom/pull/76)，548 行：Node 原子对账、断线状态及重试。
 3. 受支持 TLS、证书身份固定和有界帧传输。
 4. Node 凭证的本机保护，不落明文 secret。
 5. Brain/Node 认证服务接线、限速和纵向传输测试。
@@ -45,6 +45,18 @@ R4 仍需从已有持久 Task/Run/回执恢复，不能重新生成执行键。�
 当前 Brain 继续拒绝 R4 尚未授权的 RunReceipt/Assignment，未接真实 Runtime 执行。
 新增 7 项 Node 行为测试，`just test-rust` 275 + 4、95 前端 + build、两组 Clippy
 及桌面格式通过；上游 `just fmt` 的既有 Python 故障未变。
+
+R3.4c：使用 [Rustls 0.23.43](https://docs.rs/rustls/0.23.43/rustls/struct.ConnectionCommon.html)
+和 ring，仅 TLS 1.3、固定 ALPN；正常证书链/名称/时间校验后额外核对可信 leaf DER SHA-256。
+关闭 session resumption、tickets 和 early data，不使用环境变量密钥日志或自定义跳过校验器。
+只接收明确配置的 loopback、RFC1918、Tailscale CGNAT 或 IPv6 ULA 地址，不解析任意 URL。
+每次握手/帧使用总计 5 秒和 256 KiB wire 预算；先读 4 字节长度再分配最多 64 KiB，
+无压缩、无明文降级，截断/超限/IO 错误关闭连接。接收缓冲清零，构造完成前不能发送应用数据。
+6 项真实 Windows loopback TLS 测试覆盖最大帧、错误 root/name/pin/expiry/ALPN、明文对端、
+截断/超限与预算。最终 281 + 4 Rust、95 前端 + build、两组 Clippy 和桌面格式检查通过。
+测试证书生成器固定 rcgen 0.14.7；0.14.10 要求 Rust 1.88，未提升项目 MSRV。
+Cargo.lock 只添加 TLS/测试所需依赖，没有升级既有包；所需 Bazel 锁更新仍因既有 Python
+启动器失败，MODULE.bazel.lock 未变。此测试不等于私网两机或真实 Codex Gate 通过。
 
 首版统一使用应用层 TLS（即使运行于 Tailscale），避免把私网 IP 当作加密/身份认证证明。
 根证书、服务端名称和预先可信获取的证书 pin 均需校验；不做首次连接自动信任，失败不降级明文。

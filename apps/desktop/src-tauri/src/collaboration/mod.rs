@@ -7,6 +7,7 @@ mod protocol;
 mod reconcile;
 mod snapshot;
 mod storage;
+mod tls;
 
 #[cfg(test)]
 #[path = "authority_restore_tests.rs"]
