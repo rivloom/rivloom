@@ -12,6 +12,7 @@ mod server;
 mod snapshot;
 mod storage;
 mod tls;
+mod trust;
 mod wire;
 
 #[cfg(test)]

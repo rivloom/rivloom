@@ -1,6 +1,6 @@
 # Rivloom Runtime Host R3.4 验证记录
 
-日期：2026-08-31。状态：后端实现及本机验证完成，待合并；Gate R3 未通过。
+日期：2026-08-31。状态：后端已合入 `2b2d7915b3` 并独立复验；Gate R3 未通过。
 
 ## 基线和实施顺序
 
@@ -20,7 +20,9 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 6. [PR #80](https://github.com/rivloom/rivloom/pull/80)，447 行：TLS 监听生命周期与有界 worker。
 7. [PR #81](https://github.com/rivloom/rivloom/pull/81)，621 行：Node 客户端接线和两个 Node 的纵向传输测试。
 
-#75–#81 均为 Draft，未合并；已串行自审，不代表独立他人批准。
+#75–#81 均已按表中差异顺序普通 merge；原 Head 未变，无新增评论/审查反馈。
+独立主干复验 305 + 4 Rust、95 前端、build、两组 Clippy 和桌面格式通过。
+后续安全启动/托管工作见 [桌面托管记录](2026-08-31-r3-desktop-hosting-verification.md)。
 发布时发现 fork 的 gh 默认指向上游，导致两次创建请求被拒绝；显式指定目标后已正常发布。
 后续 gh 命令必须带 `-R rivloom/rivloom`，不能依赖工作目录推断仓库；未更换凭证或绕过访问控制。
 
