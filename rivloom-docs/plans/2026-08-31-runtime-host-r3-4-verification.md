@@ -15,8 +15,10 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 1. [PR #75](https://github.com/rivloom/rivloom/pull/75)，545 行：成员可见数据投影及分页增量对账。
 2. [PR #76](https://github.com/rivloom/rivloom/pull/76)，548 行：Node 原子对账、断线状态及重试。
 3. [PR #77](https://github.com/rivloom/rivloom/pull/77)，738 行：TLS、证书身份固定和有界传输。
-4. Node 凭证的本机保护，不落明文 secret。
-5. Brain/Node 认证服务接线、限速和纵向传输测试。
+4. [PR #78](https://github.com/rivloom/rivloom/pull/78)，470 行：Windows Node 凭证保护。
+5. Brain 认证服务、owner 鉴权和请求限流。
+6. TLS 监听生命周期与有界 worker。
+7. Node 客户端接线和两个 Node 的纵向传输测试。
 
 ## 对账和隐私边界
 
@@ -69,6 +71,17 @@ generic credential、当前用户/本机持久作用域，Rivloom 不写普通�
 新增 5 项测试；沙箱内原生写入失败，正常用户会话的完整 286 + 4 Rust 测试通过，
 其中真实 OS 往返只创建随机命名合成槽并清理。95 前端 + build、两组 Clippy、桌面格式通过。
 未把沙箱内失败或未运行的 Linux/macOS OS vault 记为通过；Bazel/上游格式化既有故障仍保留。
+
+R3.4e：控制帧有独立 version、请求 correlation ID、严格封闭的操作/响应 schema，错误不回显正文。
+TLS 接线必须先申请 session，再握手；最多 16 个 session，每 60 秒最多 64 次准入、1024 个请求，
+每连接最多 256 个不同请求 ID，重复 ID 直接拒绝。业务 Submit 仍由 Brain 的持久幂等账本处理。
+邀请兑换只能在新连接，随后必须认证；邀请/凭证只在整份存储提交后响应。
+每次请求核对当前 credential；邀请创建/取消、成员撤销还必须核对真实 owner membership。
+live TLS pulse 与重试的业务 Message 分开，不消耗业务重放账本；presence 仍按 30 秒 TTL 收敛。
+冲突可先对账；其他拒绝、容量或存储错误关闭 session。存储锁不跨网络 IO 持有。
+管理操作和邀请兑换不自动重试：回应丢失/OS 保存失败时，由 owner 检查并撤销孤立成员/重发邀请，
+不重新兑换已消费的 secret，也不宣称跨存储与网络的 exactly-once 响应。
+新增 7 项行为测试，293 + 4 Rust、95 前端 + build、两组 Clippy 和桌面格式通过。
 
 首版统一使用应用层 TLS（即使运行于 Tailscale），避免把私网 IP 当作加密/身份认证证明。
 根证书、服务端名称和预先可信获取的证书 pin 均需校验；不做首次连接自动信任，失败不降级明文。
