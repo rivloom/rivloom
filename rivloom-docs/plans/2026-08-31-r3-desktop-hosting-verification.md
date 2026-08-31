@@ -1,6 +1,6 @@
 # Gate R3：安全启动和桌面托管验证
 
-日期：2026-08-31。状态：本批信任引导基础、TLS 身份、本机托管及命令已实现，待合并；Gate R3 未通过。
+日期：2026-08-31。状态：本批信任引导基础、TLS 身份、本机托管及命令已实现，Draft #82–#85 待合并；Gate R3 未通过。
 
 ## 基线与范围
 
@@ -14,7 +14,7 @@ TypeScript/Vite、两组 Clippy 和桌面格式检查通过。原主目录旧 ma
 1. [PR #82](https://github.com/rivloom/rivloom/pull/82)，326 行：公开信任资料及独立指纹确认。
 2. [PR #83](https://github.com/rivloom/rivloom/pull/83)，484 行：服务端 TLS 身份生成、OS 保护及严格恢复。
 3. [PR #84](https://github.com/rivloom/rivloom/pull/84)，566 行：本机 Brain 初始化和显式生命周期。
-4. 桌面 managed state、四个 Tauri 命令与应用退出关闭接线。
+4. [PR #85](https://github.com/rivloom/rivloom/pull/85)，406 行：桌面 managed state、四个 Tauri 命令与应用退出关闭接线。
 
 不自动启动网络服务，不配置防火墙或安装 Tailscale，不读取 Runtime 登录凭据。
 桌面加入/邀请 UI、凭证失效恢复及两机手工验收仍需独立完成；不把本机测试当 Gate 通过。
