@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::credential::{
     AccessError, Clock, CredentialBinding, CredentialRegistry, IssuedCredential, SecretPurpose,
@@ -50,23 +50,64 @@ pub(super) struct Enrollment {
     pub(super) credential: IssuedCredential,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PendingInvitation {
     verifier: [u8; 32],
     issued_at: i64,
     expires_at: i64,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", try_from = "InvitationSnapshot")]
 pub(super) struct InvitationRegistry {
     brain_id: String,
     clock: Clock,
     pending: BTreeMap<String, PendingInvitation>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InvitationSnapshot {
+    brain_id: String,
+    clock: Clock,
+    #[serde(deserialize_with = "super::snapshot::unique_map::<_, _, 32>")]
+    pending: BTreeMap<String, PendingInvitation>,
+}
+
+impl TryFrom<InvitationSnapshot> for InvitationRegistry {
+    type Error = AccessError;
+    fn try_from(value: InvitationSnapshot) -> Result<Self, Self::Error> {
+        if !id(&value.brain_id) || !timestamp(value.clock.high_water_at()) {
+            return Err(AccessError::Rejected);
+        }
+        for (key, invitation) in &value.pending {
+            if SecretToken::parse(key).is_err()
+                || !timestamp(invitation.issued_at)
+                || invitation.issued_at > value.clock.high_water_at()
+                || !timestamp(invitation.expires_at)
+                || invitation.issued_at.checked_add(INVITATION_TTL_SECONDS)
+                    != Some(invitation.expires_at)
+            {
+                return Err(AccessError::Rejected);
+            }
+        }
+        Ok(Self {
+            brain_id: value.brain_id,
+            clock: value.clock,
+            pending: value.pending,
+        })
+    }
+}
+
 impl InvitationRegistry {
+    pub(super) fn brain_id(&self) -> &str {
+        &self.brain_id
+    }
+    pub(super) fn high_water_at(&self) -> i64 {
+        self.clock.high_water_at()
+    }
+
     pub(super) fn new(brain_id: String) -> Result<Self, AccessError> {
         if !id(&brain_id) {
             return Err(AccessError::Rejected);
