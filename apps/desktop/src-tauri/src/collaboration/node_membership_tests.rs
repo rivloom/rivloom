@@ -147,7 +147,7 @@ fn canceled_invitation_is_not_redeemable_and_is_absent_from_status_and_directory
 
 #[test]
 fn owner_registration_requires_confirmation_correct_device_and_protected_credential() {
-    let f = fixture();
+    let mut f = fixture();
     let temp = TempDir::new().unwrap();
     let session = NodeSession::new(temp.path().join("node"), Memory::default()).unwrap();
     let profile = HostProfile {
@@ -178,6 +178,14 @@ fn owner_registration_requires_confirmation_correct_device_and_protected_credent
         Err(SessionError::Invalid)
     );
     assert!(!temp.path().join("node").exists());
+    session
+        .connect_owner(&identity("alice"), &profile, &f.descriptor.fingerprint())
+        .unwrap();
+    f.server.stop();
+    assert_eq!(
+        session.connect_owner(&identity("alice"), &profile, &f.descriptor.fingerprint()),
+        Err(SessionError::Existing)
+    );
 }
 
 #[test]

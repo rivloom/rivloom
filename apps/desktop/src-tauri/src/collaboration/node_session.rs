@@ -118,6 +118,11 @@ impl<B: SecretBackend> NodeSession<B> {
         confirmed_fingerprint: &str,
     ) -> Result<NodeStatus, SessionError> {
         let mut state = self.guard()?;
+        match self.store.load(identity) {
+            Err(RegistrationError::NotConfigured) => {}
+            Ok(_) => return Err(SessionError::Existing),
+            Err(error) => return Err(error.into()),
+        }
         let registration = NodeRegistration::confirmed(
             identity,
             &profile
