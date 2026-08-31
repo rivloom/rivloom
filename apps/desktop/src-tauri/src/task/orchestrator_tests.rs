@@ -67,6 +67,17 @@ fn one_local_codex_run_uses_an_isolated_thread_and_persists_a_verifiable_receipt
     assert_eq!(completion.cleanup, WorktreeCleanup::Removed);
     assert!(!fixture.repository.join("generated.txt").exists());
     let requests = fixture.connection.requests();
+    let thread_cwd = requests[0].1["cwd"].as_str().unwrap();
+    assert_eq!(
+        requests[0],
+        (
+            "thread/start".to_string(),
+            json!({
+                "cwd": thread_cwd,
+                "config": {"skills.include_instructions": false},
+            }),
+        )
+    );
     assert_eq!(
         requests
             .iter()
@@ -75,6 +86,7 @@ fn one_local_codex_run_uses_an_isolated_thread_and_persists_a_verifiable_receipt
         vec!["thread/start", "turn/start"]
     );
     let run_cwd = requests[1].1["cwd"].as_str().unwrap();
+    assert_eq!(thread_cwd, run_cwd);
     assert_ne!(run_cwd, fixture.project.cwd());
     assert!(!PathBuf::from(run_cwd).exists());
     let stored = fs::read_to_string(&fixture.task_file).unwrap();
@@ -87,6 +99,51 @@ fn one_local_codex_run_uses_an_isolated_thread_and_persists_a_verifiable_receipt
     };
     assert_eq!(*existing, completion.run);
     assert_eq!(fixture.connection.requests().len(), request_count + 2);
+}
+
+#[test]
+fn uncertain_runs_and_unavailable_patch_bodies_retain_the_worktree() {
+    for (contents, outcome, patch_state) in [
+        (
+            b"keep me\n".to_vec(),
+            RunReceiptOutcome::OutcomeUnknown,
+            PatchArtifactState::Complete,
+        ),
+        (
+            vec![b'x'; 512 * 1024 + 1],
+            RunReceiptOutcome::Success,
+            PatchArtifactState::TooLarge,
+        ),
+        (
+            vec![0xff],
+            RunReceiptOutcome::Success,
+            PatchArtifactState::UnsupportedEncoding,
+        ),
+    ] {
+        let fixture = Fixture::new("goal", Ok(turn_response()));
+        let LocalCodexRunStart::Active(mut active) =
+            fixture.runner.start(fixture.request()).unwrap()
+        else {
+            panic!("run must become active");
+        };
+        let generated = PathBuf::from(active.worktree.cwd()).join("generated.txt");
+        fs::write(&generated, &contents).unwrap();
+        let completion = if outcome == RunReceiptOutcome::OutcomeUnknown {
+            finished(active.mark_disconnected().unwrap())
+        } else {
+            fixture.connection.terminal("completed");
+            poll_until_finished(&mut active)
+        };
+        assert_eq!(completion.patch.state, patch_state);
+        assert_eq!(
+            completion.cleanup,
+            WorktreeCleanup::Retained {
+                reason: WorktreeCleanupFailure::EvidenceIncomplete,
+            }
+        );
+        assert_eq!(fs::read(generated).unwrap(), contents);
+        assert!(!fixture.repository.join("generated.txt").exists());
+    }
 }
 
 #[test]

@@ -41,6 +41,8 @@ function taskState(tasks: TaskRecord[]): TasksState {
 }
 
 function upsertTask(tasks: TaskRecord[], task: TaskRecord): TaskRecord[] {
+  const existing = tasks.find(({ id }) => id === task.id);
+  if (existing && latestSequence(existing) > latestSequence(task)) return tasks;
   return [task, ...tasks.filter(({ id }) => id !== task.id)];
 }
 
