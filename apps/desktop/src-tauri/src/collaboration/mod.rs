@@ -7,10 +7,14 @@ mod node;
 mod protocol;
 mod reconcile;
 mod secret_store;
+mod server;
 mod snapshot;
 mod storage;
 mod tls;
 mod wire;
+
+#[cfg(test)]
+mod test_support;
 
 #[cfg(test)]
 #[path = "authority_restore_tests.rs"]

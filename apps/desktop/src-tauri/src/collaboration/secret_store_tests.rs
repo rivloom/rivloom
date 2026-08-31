@@ -1,31 +1,8 @@
+use super::super::test_support::Memory;
 use super::*;
 use pretty_assertions::assert_eq;
-use std::collections::BTreeMap;
-use std::sync::Mutex;
 
 const NOW: i64 = 1_788_000_000;
-
-#[derive(Default)]
-struct Memory {
-    entries: Mutex<BTreeMap<String, Zeroizing<Vec<u8>>>>,
-}
-impl SecretBackend for Memory {
-    fn read(&self, target: &str) -> Result<Option<Zeroizing<Vec<u8>>>, VaultError> {
-        Ok(self.entries.lock().unwrap().get(target).cloned())
-    }
-    fn write_new(&self, target: &str, bytes: &[u8]) -> Result<(), VaultError> {
-        let mut entries = self.entries.lock().unwrap();
-        if entries.contains_key(target) {
-            return Err(VaultError::Existing);
-        }
-        entries.insert(target.into(), Zeroizing::new(bytes.to_vec()));
-        Ok(())
-    }
-    fn remove(&self, target: &str) -> Result<(), VaultError> {
-        self.entries.lock().unwrap().remove(target);
-        Ok(())
-    }
-}
 
 fn credential() -> IssuedCredential {
     IssuedCredential {

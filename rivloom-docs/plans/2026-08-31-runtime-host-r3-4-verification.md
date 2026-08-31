@@ -16,7 +16,7 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 2. [PR #76](https://github.com/rivloom/rivloom/pull/76)，548 行：Node 原子对账、断线状态及重试。
 3. [PR #77](https://github.com/rivloom/rivloom/pull/77)，738 行：TLS、证书身份固定和有界传输。
 4. [PR #78](https://github.com/rivloom/rivloom/pull/78)，470 行：Windows Node 凭证保护。
-5. Brain 认证服务、owner 鉴权和请求限流。
+5. [PR #79](https://github.com/rivloom/rivloom/pull/79)，694 行：Brain 认证服务、owner 鉴权和请求限流。
 6. TLS 监听生命周期与有界 worker。
 7. Node 客户端接线和两个 Node 的纵向传输测试。
 
@@ -82,6 +82,14 @@ live TLS pulse 与重试的业务 Message 分开，不消耗业务重放账本�
 管理操作和邀请兑换不自动重试：回应丢失/OS 保存失败时，由 owner 检查并撤销孤立成员/重发邀请，
 不重新兑换已消费的 secret，也不宣称跨存储与网络的 exactly-once 响应。
 新增 7 项行为测试，293 + 4 Rust、95 前端 + build、两组 Clippy 和桌面格式通过。
+
+R3.4f：仅显式启动的私网 TLS listener，准入发生在握手前，最多 16 个 worker。
+stop/drop 先关闭所有 socket，再 join listener/worker，唤醒阻塞的握手和读帧；无遗留后台线程。
+Windows loopback 测试暴露 accepted socket 继承非阻塞模式的问题，已在 TLS 握手前恢复阻塞模式。
+新增 5 项测试覆盖真实 TLS 认证/邀请/对账、畸形帧隔离、停止和 permit 回收。
+最终 298 + 4 Rust、95 前端 + build、两组 Clippy 和桌面格式通过；失败回归日志另行保留。
+5 秒空闲读帧也会断开，调用方需及时 pulse 或显式重连；没有隐藏的自动重试。
+尚未注册 Tauri 命令、桌面 UI 或自动监听服务，不更改防火墙。
 
 首版统一使用应用层 TLS（即使运行于 Tailscale），避免把私网 IP 当作加密/身份认证证明。
 根证书、服务端名称和预先可信获取的证书 pin 均需校验；不做首次连接自动信任，失败不降级明文。
