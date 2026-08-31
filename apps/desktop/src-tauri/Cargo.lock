@@ -2759,10 +2759,12 @@ name = "rivloom-desktop"
 version = "0.1.0-alpha.0"
 dependencies = [
  "dunce",
+ "getrandom 0.3.4",
  "pretty_assertions",
  "serde",
  "serde_json",
  "sha2",
+ "subtle",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -2771,6 +2773,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]
@@ -3235,6 +3238,12 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "subtle"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "swift-rs"
@@ -5035,6 +5044,12 @@ dependencies = [
  "syn 2.0.119",
  "synstructure",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 
 [[package]]
 name = "zerotrie"

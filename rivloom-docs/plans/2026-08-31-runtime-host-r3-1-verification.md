@@ -1,6 +1,6 @@
 # Rivloom Runtime Host R3.1 验证记录
 
-日期：2026-08-31。状态：协议 v1 实现与本地自动化验证完成；PR 待审查合并，Gate R3 未通过。
+日期：2026-08-31。状态：协议 v1 已合入 main，合并后的主干验证通过；Gate R3 未通过。
 
 ## 基线与审查单元
 
@@ -10,10 +10,10 @@
 - `git fetch origin main` 后从 `8140f7c46b` 创建独立 worktree
   `C:/project/opencohive/.worktrees/r3-1-collaboration-protocol`。
   主目录仍在旧本地 main，其原有 `apps/desktop/src-tauri/Cargo.toml` 改动未覆盖。
-- R3.1a：[Draft PR #67](https://github.com/rivloom/rivloom/pull/67)，
+- R3.1a：[PR #67](https://github.com/rivloom/rivloom/pull/67)，
   `codex/r3-1-collaboration-protocol` → `main`，提交 `f2536f4abf`，579 changed lines。
-- R3.1b：`codex/r3-1-receipt-contract` → `codex/r3-1-collaboration-protocol`，
-  补齐回执/Artifact 和严格字符串枚举。先合并 #67，再重定此 PR 的 base 为 main。
+- R3.1b：[PR #68](https://github.com/rivloom/rivloom/pull/68)，531 changed lines，
+  补齐回执/Artifact 和严格字符串枚举。#67 合并后，已将其 base 从 #67 分支重定到 main。
   两个单元分别验证，每个 PR 均低于 800 changed lines；没有 force-push 或自动合并。
 
 ## 实现与行为证据
@@ -65,5 +65,16 @@ cancel、越界拒绝和 cleanup 验收仍延期；Gate R4 和 Windows 可用性
 未修改 `codex-rs`、CI、旧 Draft PR #37/#38；未使用子 agent，未引入第二 Runtime、
 Marketplace 或 Skill Directory。
 
-下一步：审查并顺序合并两张 R3.1 PR，再开始 R3.2 邀请、成员与 Node 凭证。
+## 合并后复验
+
+两张 PR 经过串行自审并标记 `code-reviewed`，按 #67、#68 顺序普通 merge，
+分别生成 `956eef784f`、`4b4d5f7839`。未使用管理员绕过、force-push 或自动合并。
+后者文件树与已验证的 R3.1b head `a7e1568fce` 完全一致。
+
+从最新 `origin/main@4b4d5f7839` 创建独立 detached worktree
+`C:/project/opencohive/.worktrees/r3-1-main-verification`，重新通过
+`just test-rust`（224 + 4）、`just check`（95 + build）、两组 Clippy、
+桌面格式检查和 diff 检查。GitHub 的元数据/CLA 检查不代替本地主干验证；CI 未恢复。
+
+下一步：[R3.2 邀请、成员与 Node 凭证](2026-08-31-runtime-host-r3-2-verification.md)。
 R3.3 Brain 状态存储、R3.4 连接/对账及两机 Gate R3 仍未实现/验收。
