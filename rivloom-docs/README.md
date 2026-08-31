@@ -12,6 +12,8 @@ directory, which is reserved for upstream Codex documentation.
   defines the active milestones and delivery gates.
 - [Collaboration protocol v1](plans/collaboration-protocol-v1.md) defines the bounded R3.1 wire contract
   and the authorization boundaries for subsequent Brain/Node work.
+- [R3.1 verification](plans/2026-08-31-runtime-host-r3-1-verification.md) records the protocol PRs,
+  local validation, security review and deferred runtime/transport gates.
 - [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)
   records the current local implementation, automated evidence, publication state, and remaining
   native smoke checks.

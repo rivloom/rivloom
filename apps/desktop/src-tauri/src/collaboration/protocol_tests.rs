@@ -3,6 +3,15 @@ use serde_json::{Value, json};
 
 use super::*;
 
+fn artifact() -> Value {
+    json!({
+        "artifactId": "artifact-1", "taskId": "task-1", "runId": "run-1",
+        "baselineCommit": "a".repeat(40), "state": "empty", "limitBytes": 524288,
+        "byteCount": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    })
+}
+
 fn payloads() -> Vec<Value> {
     vec![
         json!({"type": "identity", "data": {
@@ -27,6 +36,17 @@ fn payloads() -> Vec<Value> {
                 "projectRef": "project-1", "runId": "run-1", "runKey": "run-key-1",
                 "acceptedAt": 1788000000}
         }}),
+        json!({"type": "artifact", "data": artifact()}),
+        json!({"type": "runReceipt", "data": {
+            "content": {
+                "taskId": "task-1", "runId": "run-1", "nodeId": "node-bob",
+                "runtimeId": "codex", "runtimeVersion": "1.2.3",
+                "startedAt": 1788000000, "finishedAt": 1788000090, "outcome": "success",
+                "summary": "Requested change is ready.", "failure": null,
+                "tests": {"state": "notReported"}, "artifact": artifact()
+            },
+            "contentSha256": "b22ed69ff79dccb1da4985a875c30e7aae06fa5aa1c0d46b2538e66ffd56fe40"
+        }}),
     ]
 }
 
@@ -40,6 +60,18 @@ fn envelope(payload: Value) -> Value {
 
 fn decode(value: &Value) -> Result<Message, ProtocolError> {
     Message::decode(&serde_json::to_vec(value).unwrap())
+}
+
+// Rehash mutated fixtures so semantic failures cannot hide behind a stale hash.
+fn reseal(value: &mut Value) {
+    if let Ok(content) =
+        serde_json::from_value::<ReceiptContent>(value["payload"]["data"]["content"].clone())
+    {
+        value["payload"]["data"]["contentSha256"] = json!(format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&content).unwrap())
+        ));
+    }
 }
 
 #[test]
@@ -175,10 +207,68 @@ fn assignment_acceptance_cannot_supply_paths_or_expand_permissions() {
 }
 
 #[test]
+fn artifact_and_receipt_invariants_reject_forged_results() {
+    for (field, value) in [
+        ("baselineCommit", json!("main")),
+        ("sha256", json!("not-a-hash")),
+        ("state", json!("complete")),
+        ("limitBytes", json!(524289)),
+        ("byteCount", json!(1)),
+        ("body", json!("private patch")),
+    ] {
+        let mut invalid = envelope(payloads().remove(4));
+        invalid["payload"]["data"][field] = value;
+        assert_eq!(decode(&invalid), Err(ProtocolError::InvalidMessage));
+    }
+    let mut tampered = envelope(payloads().remove(5));
+    tampered["payload"]["data"]["content"]["summary"] = json!("Tampered");
+    assert_eq!(decode(&tampered), Err(ProtocolError::InvalidMessage));
+    for (field, value) in [
+        ("summary", json!("x".repeat(4097))),
+        ("finishedAt", json!(0)),
+        ("outcome", json!("failed")),
+        ("failure", json!("raw private error")),
+        (
+            "tests",
+            json!({"state": "reported", "executions": vec![json!({"name":"test","exitCode":0}); 33]}),
+        ),
+        ("logs", json!(["raw runtime output"])),
+    ] {
+        let mut invalid = envelope(payloads().remove(5));
+        invalid["payload"]["data"]["content"][field] = value;
+        reseal(&mut invalid);
+        assert_eq!(decode(&invalid), Err(ProtocolError::InvalidMessage));
+    }
+    let mut invalid = envelope(payloads().remove(5));
+    invalid["payload"]["data"]["content"]["artifact"]["runId"] = json!("other-run");
+    reseal(&mut invalid);
+    assert_eq!(decode(&invalid), Err(ProtocolError::InvalidMessage));
+}
+
+#[test]
+fn terminal_receipts_preserve_unknown_and_unreported_results() {
+    for (outcome, failure) in [
+        ("cancelled", Value::Null),
+        ("failed", json!("executionFailed")),
+        ("outcomeUnknown", json!("connectionLost")),
+    ] {
+        let mut expected = envelope(payloads().remove(5));
+        expected["payload"]["data"]["content"]["outcome"] = json!(outcome);
+        expected["payload"]["data"]["content"]["failure"] = failure;
+        reseal(&mut expected);
+        let encoded = decode(&expected).unwrap().encode().unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&encoded).unwrap(), expected);
+    }
+}
+
+#[test]
 fn unit_variants_and_tag_wrappers_reject_unrecognized_fields() {
     let mut assignment = envelope(payloads().remove(3));
     assignment["payload"]["data"]["decision"] = json!({"state": "offered", "networkAccess": true});
     assert_eq!(decode(&assignment), Err(ProtocolError::InvalidMessage));
+    let mut receipt = envelope(payloads().remove(5));
+    receipt["payload"]["data"]["content"]["tests"] = json!({"state": "notReported", "logs": []});
+    assert_eq!(decode(&receipt), Err(ProtocolError::InvalidMessage));
     let mut identity = envelope(payloads().remove(0));
     identity["payload"]["runtimeToken"] = json!("synthetic-secret");
     assert_eq!(decode(&identity), Err(ProtocolError::InvalidMessage));
@@ -189,4 +279,60 @@ fn errors_never_echo_input() {
     let error = Message::decode(br#"{"privateToken":"synthetic-secret"}"#).unwrap_err();
     assert_eq!(error.to_string(), "Invalid collaboration message");
     assert_eq!(format!("{error:?}"), "InvalidMessage");
+}
+
+#[test]
+fn string_enums_do_not_accept_object_aliases() {
+    for (index, field, variant) in [
+        (0, "role", "member"),
+        (1, "runtimeId", "codex"),
+        (2, "status", "offered"),
+        (2, "expectedArtifact", "patch"),
+        (3, "executionPolicy", "managedWorktreeOffline"),
+        (4, "state", "empty"),
+    ] {
+        let mut invalid = envelope(payloads().remove(index));
+        invalid["payload"]["data"][field] = json!({(variant): null});
+        assert_eq!(decode(&invalid), Err(ProtocolError::InvalidMessage));
+    }
+    let mut node = envelope(payloads().remove(1));
+    node["payload"]["data"]["capabilities"] = json!([{"taskRun": null}]);
+    assert_eq!(decode(&node), Err(ProtocolError::InvalidMessage));
+}
+
+#[test]
+fn sending_checks_encoded_size_after_json_escaping() {
+    let mut task = envelope(payloads().remove(2));
+    task["payload"]["data"]["goal"] = json!("\u{0000}".repeat(4096));
+    task["payload"]["data"]["constraints"] = json!(vec!["\u{0000}".repeat(1024); 8]);
+    let raw: Envelope = serde_json::from_value(task).unwrap();
+    assert_eq!(Message::try_from(raw), Err(ProtocolError::MessageTooLarge));
+}
+
+#[test]
+fn artifact_availability_and_test_report_limits_are_preserved() {
+    for (state, byte_count, sha256) in [
+        ("complete", json!(524288), json!("b".repeat(64))),
+        ("unsupportedEncoding", json!(1), json!("b".repeat(64))),
+        ("tooLarge", Value::Null, Value::Null),
+    ] {
+        let mut expected = envelope(payloads().remove(4));
+        expected["payload"]["data"]["state"] = json!(state);
+        expected["payload"]["data"]["byteCount"] = byte_count;
+        expected["payload"]["data"]["sha256"] = sha256;
+        let encoded = decode(&expected).unwrap().encode().unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&encoded).unwrap(), expected);
+    }
+    let mut receipt = envelope(payloads().remove(5));
+    receipt["payload"]["data"]["content"]["tests"] = json!({"state": "reported", "executions": vec![json!({"name": "x".repeat(256), "exitCode": 0}); 16]});
+    reseal(&mut receipt);
+    assert!(decode(&receipt).is_ok());
+    for executions in [
+        vec![json!({"name": "x".repeat(257), "exitCode": 0})],
+        vec![json!({"name": "x".repeat(256), "exitCode": 0}); 17],
+    ] {
+        receipt["payload"]["data"]["content"]["tests"]["executions"] = json!(executions);
+        reseal(&mut receipt);
+        assert_eq!(decode(&receipt), Err(ProtocolError::InvalidMessage));
+    }
 }
