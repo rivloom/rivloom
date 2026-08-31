@@ -129,6 +129,7 @@
 }
 .note,
 .status {
+  overflow-wrap: anywhere;
   color: var(--color-text-muted);
   font-size: 13px;
   line-height: 1.7;
@@ -184,6 +185,10 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
+}
+.row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 600px) {
   .header,
