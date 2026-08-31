@@ -1,11 +1,12 @@
 # Rivloom Runtime Host R1/R2 验证记录
 
 - 日期：2026-08-30
+- 决策更新：2026-08-31，用户确认保留 elevated 方向
 - 平台：Windows
 - 实现基线：`1c531ca9eb`
 - Gate 分支：`codex/r2-gate-docs`
-- 状态：R1/R2 实现与自动化验证完成；原生宽/窄窗口视觉 Gate 通过；ADR-0007 目标策略
-  已记录，但 Windows 实施被隔离 Runtime Home 与 elevated 沙箱凭据冲突阻塞
+- 状态：R1/R2 实现与自动化验证完成；原生宽/窄窗口视觉 Gate 通过；elevated 方向已确定，
+  Windows 接入仍被隔离 Runtime Home 与沙箱凭据冲突阻塞
 
 ## 1. 结论
 
@@ -22,16 +23,18 @@ App Server 的 `codex-approval-review` 线程在 Windows 上稳定栈溢出。�
 Home 的 Windows 沙箱设置和身份；没有显式选择原生沙箱时，模型工具被策略拒绝，Turn 的
 完成事件也不能证明任务目标已经完成。
 
-临时为 sidecar 选择 `windows.sandbox="elevated"` 能到达正确的 worktree/禁网沙箱边界，
-但首次执行需要初始化。最终源码复核发现 elevated 使用固定系统账号，而账号密码又分别保存
-在各自 `CODEX_HOME`：为隔离 Home 初始化可能重设主 Codex Home 使用的同一账号密码。该风险
-不能靠代答一次管理员确认来解决。因此临时产品代码已回滚，当前代码继续保持
+临时为 sidecar 选择 `windows.sandbox="elevated"` 后，请求/rollout 声明的 worktree 和禁网
+参数正确，但首次执行需要初始化，尚未证明 OS 隔离已生效。源码复核发现 elevated 使用固定
+系统账号，而账号密码分别保存在各自 `CODEX_HOME`：为隔离 Home 初始化可能重设主 Codex
+Home 使用的同一账号密码。该风险不能靠代答一次管理员确认来解决。因此临时产品代码已
+回滚，当前代码继续保持
 `on-request + auto_review`；[ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md)
-只记录已接受的目标策略和待决实现路径，不宣称 Windows 实施已经完成。
+记录已接受的目标策略及已选定的 elevated 方向，不宣称 Windows 实施已经完成。
 
-Rivloom 对所有失败按设计 fail closed：Run 进入 `outcomeUnknown`，不会伪报成功或自动重跑；
-专用仓库的 checkout、HEAD 和基线文件均未改变。必须先明确选择较弱 `unelevated`，或先解决
-elevated 的多 Home 状态归属，再重跑 success/cancel Gate。
+Rivloom 对已验证的 Runtime 崩溃和执行中重启按设计 fail closed：Run 进入 `outcomeUnknown`，
+不会自动重跑。`never` 工具受拒但 Turn 完成的诊断场景不能算目标成功，不能笼统归为同一种
+未知终态。专用仓库的 checkout、HEAD 和基线文件均未改变。用户已选择 elevated；下一步是
+解决多 Home 共存并重跑 success/cancel Gate，不再等待用户二选一。
 
 ## 2. 里程碑完成度
 
@@ -46,7 +49,7 @@ elevated 的多 Home 状态归属，再重跑 success/cancel Gate。
 | R2.4 worktree 与 Patch Artifact  | 完成     | 通过                 | [PR #49](https://github.com/rivloom/rivloom/pull/49)、[#50](https://github.com/rivloom/rivloom/pull/50) |
 | R2.5 RunReceipt、编排、命令与 UI | 完成     | 自动化通过           | [PR #51](https://github.com/rivloom/rivloom/pull/51) 到 [#64](https://github.com/rivloom/rivloom/pull/64) |
 | R2 原生视觉 Gate                | 完成     | 通过                 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
-| R2 真实 success/cancel Gate     | 未完成   | Windows 沙箱实现待决 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                             |
+| R2 真实 success/cancel Gate     | 未完成   | elevated 已选定，共存接入待验证 | [PR #66](https://github.com/rivloom/rivloom/pull/66)                    |
 
 R3 及之后没有提前开始。当前代码仍是 Codex 专用路径，没有为了 Hermes、Reasonix、
 Claude Code 或未知第三 Runtime 创建万能适配器。
@@ -153,7 +156,7 @@ Codex Home 的 `.sandbox-secrets`，也没有批准 Windows 安全提示。
 因此：
 
 - 原审批栈溢出回归：`never` 路径未复现，诊断通过；
-- success、Patch 正文与成功 RunReceipt Gate：未通过，等待 Windows 沙箱策略决策与实现；
+- success、Patch 正文与成功 RunReceipt Gate：未通过，等待 elevated 共存接入与验证；
 - cancel Gate：未完成；必须在可用的正常执行窗口内用产品 Stop 流程复验；
 - fail-closed、断连对账、原 checkout 不变：真实进程证据通过。
 
@@ -195,14 +198,14 @@ Codex Home 的 `.sandbox-secrets`，也没有批准 Windows 安全提示。
 - Patch 正文只作为当前进程内的短期 Artifact 提供给本机 UI，不进入 RunReceipt 或 Task Store。
 - 本次验证没有读取、记录或提交账号 Token、OAuth URL 或账号文件内容。
 
-## 9. 阻塞决策与下一步
+## 9. 已确认方向与下一步
 
-1. 明确选择并形成独立安全决策：临时使用较弱的 `unelevated`，或先解决/等待上游解决
-   elevated 固定系统账号与多个 `CODEX_HOME` 分别持有凭据的冲突。不复用整个主 Codex Home，
-   不复制或链接 `.sandbox-secrets`，也不在无人确认时改变沙箱强度。
-2. 在独立、有界的实现 PR 中落地选定方案，然后在同一专用仓库重跑 success、Patch、
-   RunReceipt、cancel 和 worktree cleanup Gate，并
-   明确记录越界操作被拒绝时的终态；不得自动扩大权限或重跑未知结果。
+1. 按 2026-08-31 用户确认保留 elevated，执行 ADR-0007 的候选版本、独立测试环境和双 Home
+   共存 Gate。当前所查配置和公开 setup API 没有账号名/凭据目录 override；这不是等待用户
+   选择，而是已选路线的接入阻塞。不复用整个主 Codex Home，不复制或链接 `.sandbox-secrets`。
+2. 有受支持且通过共存验证的方案后，在独立、有界的实现 PR 中落地，再重跑 success、Patch、
+   RunReceipt、cancel 和 worktree cleanup Gate，并明确记录越界拒绝的终态。不得只凭 Turn
+   completed 或正确的请求参数认定目标/沙箱验收通过，不得自动扩大权限或重跑未知结果。
 3. 未来恢复 `on-request + auto_review` 前必须满足 ADR-0007 的版本固定、原始回归、真实
    审批、安全审查和独立 PR 条件；不得随 Runtime 升级静默切换。
 4. 按 [stacked PR queue](2026-08-30-runtime-host-pr-stack.md) 从 #41 开始依次审查和合并；

@@ -126,6 +126,15 @@ Brain 只保存有界摘要和 Artifact 元数据。
 
 远端委派不能绕过执行 Node 的本地审批。第一版不提供“远端永久允许所有命令”。
 
+2026-08-31 确认的产品方向是“默认受限，显式授权可以扩大能力”，而不是永久禁止高风险
+操作。企业可以对可信任务预授权联网、安装依赖或更大的写入范围；前提是执行 Node 纳入该
+策略，授权范围、有效期、撤销和审计语义清楚。不能把一次任务接受当作无限权限，也不能由
+远端发起者自行批准越界。
+
+elevated/unelevated 是 Windows 隔离机制选择，和业务授权范围分开设计。R2 继续以 elevated
+为接入方向且保留严格默认；企业扩权策略在后续独立设计/Gate 中落地，不在当前 Task/Run
+协议中提前增加无实际实现的万能权限字段。
+
 ## 5. 外部 Runtime 边界
 
 ### 5.1 Codex 是第一个 Runtime，不是 Rivloom 内核
@@ -222,9 +231,9 @@ R2 单机 Gate 已按
 [ADR-0007](../adr/0007-temporarily-disable-managed-run-approvals.md) 接受一个目标临时例外：
 Rivloom 受管 Codex Run 使用 `approvalPolicy=never`、唯一受管 worktree 可写并禁网，需要例外
 权限的操作在本机失败，不进入自动或人工审批。该目标在 Windows 上仍被隔离 Runtime Home
-与 elevated 沙箱凭据冲突阻塞；当前代码继续使用 `on-request + auto_review`，真实 Gate
-未通过。上述第 5 项仍是恢复审批能力以及 R3/R4 本地 Node 流程的目标，不能把尚未落地的
-R2 临时策略扩展成长期产品语义。
+与 elevated 沙箱凭据冲突阻塞；用户已确认保留 elevated，接入待验证而非路线待选择。
+当前代码继续使用 `on-request + auto_review`，真实 Gate 未通过。上述第 5 项仍是恢复审批
+能力以及 R3/R4 本地 Node 流程的目标，不能把尚未落地的 R2 临时策略扩展成长期产品语义。
 
 任务详情可以展示有限的事件时间线，但不把无限对话历史或原始 JSONL 同步给 Brain。
 
@@ -249,7 +258,7 @@ R2 临时策略扩展成长期产品语义。
 - 执行必须绑定一次接受记录、项目映射、Run ID 和幂等键。
 - 默认在隔离 worktree 运行；不能静默写入用户当前 checkout。
 - R2 目标临时无人值守模式不能请求沙箱例外、联网或自动降级重跑；Windows 实施必须先
-  解决 ADR-0007 的阻塞决策，恢复审批则必须满足其显式退出条件。
+  解决 ADR-0007 的双 Home 共存问题，恢复审批则必须满足其显式退出条件。
 - Artifact 有单项和总量硬上限，并校验内容哈希。
 - 未知协议版本、身份不匹配或签名失败时拒绝降级。
 - 高风险本地审批不允许由远端自动确认。
@@ -282,7 +291,7 @@ Claude Code、Hermes、Reasonix 等在进入里程碑前分别审查当时固定
 | Bob 拒绝或无项目映射 | Task 保持未执行 | Alice 可撤回或改派 |
 | Brain 断线但 Node 未开始 | 保持 accepted/queued | 重连对账后再开始 |
 | 运行中断线 | `outcomeUnknown` | 不自动重跑，等待 Node 回执 |
-| Codex 需要例外权限 | 当前 R2 Gate 可能为 `outcomeUnknown`；目标 `never` 模式拒绝 | Windows 沙箱实施待决；后续由 Bob 本地处理 |
+| Codex 需要例外权限 | 当前 R2 Gate 可能为 `outcomeUnknown`；目标 `never` 模式拒绝 | elevated 接入待验证；后续按 Node 已授权策略处理 |
 | App Server 崩溃 | Run 失败或未知 | 保留 worktree 和诊断，显式重试 |
 | Patch 超限或校验失败 | Artifact 不可审查 | 仅回传摘要，要求本地或分片处理 |
 | Node 重复收到请求 | 不重复执行 | 按 Run 幂等键返回已有状态 |

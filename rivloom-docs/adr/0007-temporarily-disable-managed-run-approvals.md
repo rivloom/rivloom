@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted — Temporary；Windows implementation blocked
+Accepted — Temporary（2026-08-31 已确认 elevated 方向；Windows 接入仍阻塞）
 
 ## 背景
 
@@ -76,17 +76,53 @@ Home 已保存的凭据失效；两个 Home 可能相互破坏。这个结论是
 - 不静默降级到 OpenAI 文档定义为较弱 fallback 的 `unelevated`；
 - 不把 `never` 无沙箱时的空 Patch 误报为成功。
 
-## 待决实现路径
+## 已确认实施方向（2026-08-31）
 
-必须通过后续独立安全决策明确选择并验证以下一条路径：
+用户选择保留 `elevated`，不采用 `unelevated` 作为当前 R2 解法。Rivloom 继续保留隔离
+`CODEX_HOME`；先解决设备级沙箱账号状态与多个 Home 的兼容问题，再实施目标 `never`
+策略并复验真实 Gate。此选择确认的是技术方向，不代表 elevated 已启用或 R2 已验收。
 
-1. **临时采用 `unelevated`**：保留隔离 `CODEX_HOME`，接受较弱的 Windows 沙箱，并在产品
-   状态、威胁模型和真实 Gate 中明确其网络与身份隔离限制。
-2. **保留 `elevated`**：先让 Windows 沙箱账号状态不再由多个 Home 各自持有或相互重置，
-   例如等待/推动上游把设备级沙箱状态与 `CODEX_HOME` 分离，或设计经过审查的共享状态
-   方案；不能通过复用整个主 Codex Home 来牺牲 Runtime 配置和数据隔离。
+### 当前公开接入面核查
 
-这两条路径都会改变安全边界或 Runtime 架构，属于需要用户确认且难以静默回退的决定。
+对源码基线 `fa65f38cf7` 的只读核查得到：
+
+- `codex-rs/config/src/types.rs` 中 `WindowsToml` 只暴露 `sandbox` 和
+  `sandbox_private_desktop`，没有沙箱账号名或凭据根目录配置。
+- `codex-rs/app-server-protocol/src/protocol/v2/windows_sandbox.rs` 中
+  `WindowsSandboxSetupStartParams` 只接受 `mode` 和可选 `cwd`；公开初始化入口不能为
+  Rivloom 指定独立的沙箱账号或设备级状态目录。
+- `codex-rs/windows-sandbox-rs/src/setup.rs` 的完整初始化和 refresh payload 都使用固定
+  账号名。不能把内部 helper payload 的字段当作对外稳定的接入 API。
+
+这些证据不代表已核实最新上游发行版，也没有证明所测二进制与该源码提交一一对应；候选
+Runtime 仍需固定来源、版本和 hash。当前已检查的配置/API 不提供安全的一行共存开关。
+
+### 下一步技术 Gate
+
+1. 确认候选 Runtime 是否提供受支持的多 Home 共存机制，例如设备级状态与 Home 分离。
+   若没有，不在 Rivloom 中自制凭据复制、链接、改密或内部 helper 协议方案。
+2. 首次 elevated 初始化只能在经授权的独立 Windows 测试设备/虚拟机中验证；该环境不得
+   与用户正在使用的 Codex 共用沙箱系统账号。独立测试机可以验证功能，但不能替代同机共存
+   验收；创建或使用该环境需要另行明确授权，不在当前主机上试验改密。
+3. 对支持共存的候选实现，依次验证 Home A 执行、Home B 初始化和执行、Home A 再次执行，
+   并覆盖升级/重初始化。必须证明两边都可继续工作，不混用认证/配置，不读取或回传凭据。
+4. 共存和权限边界 Gate 通过后，才按受管 Run 实施 `never` 并重跑 success、Patch、回执、
+   cancel、越界拒绝和 cleanup。仅检查请求/rollout 参数正确不能证明 OS 隔离已生效。
+
+## 企业可授权的高风险操作
+
+用户同时明确：企业协作可以接受经过授权的较高风险操作。产品不应把 R2 的禁网、单一
+worktree 和 `never` 固化为永久能力上限。`elevated` 是隔离机制选择；允许联网、扩大可写
+范围、安装依赖或执行更高风险命令属于独立的执行授权策略，两者不应混为一谈。
+这里的 `elevated` 指初始化需要管理员权限的沙箱实现，不代表 Agent 以管理员身份无约束
+运行；执行过程仍使用受限制的沙箱账号。
+
+后续扩权能力必须明确授权者、执行 Node、本次任务、资源范围、有效期和审计记录；企业策略
+可以在已批准范围内预授权，不能由远端发起者自行扩大执行 Node 权限。具体协议、UI、撤销
+和审计语义在后续独立设计/Gate 中冻结，本次只记录方向，不增加通用策略引擎或修改 R2 默认。
+
+接受业务风险也不等于接受接入缺陷：本次授权不包含破坏主 Codex Home 凭据、自动确认 UAC、
+共享 secret 或改动 Windows 系统账号。
 
 ## 恢复审批的条件
 
@@ -128,7 +164,7 @@ Home 已保存的凭据失效；两个 Home 可能相互破坏。这个结论是
 
 - R2 的实现、自动化与视觉 Gate 已完成，但真实 success/cancel Gate 仍未收口。
 - Windows 上暂时没有同时满足隔离 Home、较强原生沙箱和无人值守执行的已验证组合。
-- 进入 R3 前需要一次明确的安全/架构选择，并补做真实 success、cancel 和清理 Gate。
+- elevated 方向已确定；进入 R3 前仍需解决共存接入并补做真实 success、cancel 和清理 Gate。
 
 ### 中性
 
@@ -138,6 +174,11 @@ Home 已保存的凭据失效；两个 Home 可能相互破坏。这个结论是
   未知结果猜成策略拒绝或成功。
 
 ## 考虑过的替代方案
+
+**临时采用 `unelevated`**
+
+- 2026-08-31 未选择：用户确认保留 elevated 方向。企业可授权更高风险业务操作的需求，
+  通过独立权限策略表达，不通过静默更换为较弱沙箱表达。
 
 **保持 `on-request + auto_review` 并等待上游修复**
 
