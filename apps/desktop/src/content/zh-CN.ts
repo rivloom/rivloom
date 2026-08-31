@@ -118,6 +118,115 @@ export const zhCN = {
         "A2 只读取这条会话的归一化摘要，不载入历史消息，也不会发送模型请求。",
     },
   },
+  task: {
+    composer: {
+      label: "定义本地任务",
+      eyebrow: "Local task / bounded input",
+      title: "把目标交给本机 Codex",
+      description:
+        "Rivloom 会为这次执行创建隔离 worktree，并只把下面的有界任务正文交给 Runtime。",
+      boundary: (current: number, maximum: number) =>
+        `${current.toLocaleString()} / ${maximum.toLocaleString()}-byte run guard`,
+      goal: {
+        label: "任务目标",
+        placeholder: "清楚描述要完成的结果，例如：修复登录恢复并补充回归测试。",
+        hint: "描述可验收的结果，不要粘贴 Token、密钥或无界日志。",
+        bytes: (current: number, maximum: number) =>
+          `${current.toLocaleString()} / ${maximum.toLocaleString()} bytes`,
+      },
+      constraints: {
+        label: "执行约束（每行一条）",
+        placeholder: "保持现有存储兼容\n不修改 codex-rs",
+        hint: "最多 32 条；每条 1 KiB，合计 8 KiB。空行会被忽略。",
+        count: (current: number, maximum: number) => `${current} / ${maximum}`,
+      },
+      sharing: {
+        title: "只发送目标与约束",
+        description: "项目绝对路径、Runtime 凭据与完整日志不会进入任务正文。",
+        runtimeRequired: "连接 Codex Runtime 后即可启动",
+      },
+      actions: {
+        start: "启动本地任务",
+        starting: "正在启动…",
+      },
+      errors: {
+        goalTooLarge: "任务目标不能超过 4 KiB。",
+        tooManyConstraints: "执行约束最多 32 条。",
+        constraintTooLarge: "每条执行约束不能超过 1 KiB。",
+        constraintsTooLarge: "执行约束合计不能超过 8 KiB。",
+        promptTooLarge: "最终任务正文超过 1,000-byte 安全上限。",
+      },
+    },
+    run: {
+      label: (goal: string) => `任务 ${goal}`,
+      eyebrow: "02 / Local run",
+      constraints: "执行约束",
+      taskStatus: {
+        draft: "草稿",
+        offered: "待接受",
+        accepted: "已接受",
+        running: "运行中",
+        awaitingReview: "等待审查",
+        approved: "已接受结果",
+        rejected: "已拒绝结果",
+        cancelled: "已停止",
+        failed: "运行失败",
+        outcomeUnknown: "结果未知",
+      },
+      runStatus: {
+        queued: "排队中",
+        running: "Codex 正在执行",
+        waitingApproval: "等待本机审批",
+        completed: "执行已完成",
+        cancelled: "执行已停止",
+        failed: "执行失败",
+        outcomeUnknown: "结果无法核实",
+      },
+      notices: {
+        waitingApproval: "请在本机 Codex 完成审批；远端不能代为批准。",
+        outcomeUnknown: "运行结果无法核实，Rivloom 不会自动重跑。",
+      },
+      timeline: {
+        eyebrow: "Bounded events",
+        title: "最近状态",
+        registered: "Run 已登记",
+        taskChanged: (from: string, to: string) => `任务：${from} → ${to}`,
+        runChanged: (from: string, to: string) => `运行：${from} → ${to}`,
+      },
+      receipt: {
+        eyebrow: "Verifiable output",
+        title: "运行回执",
+        summary: "结果摘要",
+        summaryUnavailable: "Runtime 没有提供结果摘要。",
+        runtime: (runtime: string, version: string) =>
+          `${runtime} / ${version}`,
+        pending: "RunReceipt 会在运行进入可核实终态后出现。",
+      },
+      tests: {
+        title: "测试报告",
+        notReported: "测试未报告",
+        exitCode: (code: number) => `退出码 ${code}`,
+        passed: "通过",
+        failed: "失败",
+      },
+      patch: {
+        title: "Patch",
+        bytes: (value: string) => `${value} bytes`,
+        sizeUnavailable: "大小未知",
+        open: "查看 Patch",
+        state: {
+          empty: "工作区没有可报告的改动。",
+          complete: "Patch 已通过大小与哈希校验。",
+          tooLarge: "Patch 超过本地展示上限，仅保留元数据。",
+          unsupportedEncoding: "Patch 不是可安全展示的 UTF-8 文本。",
+        },
+      },
+      stop: {
+        action: "停止这次运行",
+        stopping: "正在停止…",
+      },
+    },
+  },
   identity: {
     eyebrow: "01 / Local identity",
     title: "Rivloom 身份",
