@@ -2,6 +2,7 @@ mod brain;
 mod brain_tasks;
 mod credential;
 mod invitation;
+mod node;
 mod protocol;
 mod reconcile;
 mod snapshot;

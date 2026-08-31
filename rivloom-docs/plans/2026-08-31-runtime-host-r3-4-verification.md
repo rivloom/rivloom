@@ -12,7 +12,7 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 
 继续拆为每张少于 800 行的依赖 PR，完成各批测试和串行审查后再进入下一批：
 
-1. 成员可见数据投影及分页增量对账。
+1. [PR #75](https://github.com/rivloom/rivloom/pull/75)，545 行：成员可见数据投影及分页增量对账。
 2. Node 连接状态、原子应用对账与断线保守处理。
 3. 受支持 TLS、证书身份固定和有界帧传输。
 4. Node 凭证的本机保护，不落明文 secret。
@@ -35,6 +35,16 @@ R3.4a：5 项新增对账行为测试通过，包括成员隔离、增量/修订
 非法 cursor/帧和 presence 超时。`just test-rust` 268 + 4、`just check` 95 + build、
 两组 Clippy（`-D warnings`）及桌面格式检查通过；上游格式化仍因既有 Python 启动器失败。
 本批尚无监听端口或 Node 网络客户端。
+
+R3.4b：Node 将完整分页结果一次性提交到本地有界视图（最多 192 条、3 MiB），
+错序、身份/成员关联错误或 revision 改变均丢弃未完成批次，保留最后完成的 revision。
+断线后的 running 视图保持 outcomeUnknown，重连本身不清除不确定性；不建立第二份 Run 权威。
+最多保留一条显式确认可分享的 pending Message；重试只更新 revision，不变更幂等键或内容/hash。
+确认必须匹配 pending key；确认后先对账。该 pending 目前仅在进程内跨重连保留，
+R4 仍需从已有持久 Task/Run/回执恢复，不能重新生成执行键。回执队列不等于 Brain 已接受回执，
+当前 Brain 继续拒绝 R4 尚未授权的 RunReceipt/Assignment，未接真实 Runtime 执行。
+新增 7 项 Node 行为测试，`just test-rust` 275 + 4、95 前端 + build、两组 Clippy
+及桌面格式通过；上游 `just fmt` 的既有 Python 故障未变。
 
 首版统一使用应用层 TLS（即使运行于 Tailscale），避免把私网 IP 当作加密/身份认证证明。
 根证书、服务端名称和预先可信获取的证书 pin 均需校验；不做首次连接自动信任，失败不降级明文。
