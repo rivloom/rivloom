@@ -120,6 +120,10 @@ impl TlsChannel {
     }
 
     fn handshake(mut connection: Connection, socket: TcpStream) -> Result<Self, TlsError> {
+        // Accepted Windows sockets can inherit the listener's nonblocking mode.
+        socket
+            .set_nonblocking(false)
+            .map_err(|_| TlsError::Connection)?;
         connection.set_buffer_limit(Some(MAX_CONTROL_BYTES));
         let mut io = DeadlineTcp::new(socket);
         connection
