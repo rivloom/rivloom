@@ -46,6 +46,16 @@ impl NodeRegistration {
         self.trusted_peer().map(|_| ())
     }
 
+    pub(super) fn check_identity(
+        &self,
+        identity: &RivloomIdentity,
+    ) -> Result<(), RegistrationError> {
+        if self.identity_id != identity.identity_id || self.device_id != identity.device_id {
+            return Err(RegistrationError::Invalid);
+        }
+        Ok(())
+    }
+
     /// Restores the previously recorded confirmation; never derives a replacement confirmation.
     pub(super) fn trusted_peer(&self) -> Result<TrustedPeer, RegistrationError> {
         TrustedPeer::confirm(
@@ -100,11 +110,7 @@ impl RegistrationStore {
         identity: &RivloomIdentity,
     ) -> Result<NodeRegistration, RegistrationError> {
         let registration = self.read_registration()?;
-        if registration.identity_id != identity.identity_id
-            || registration.device_id != identity.device_id
-        {
-            return Err(RegistrationError::Invalid);
-        }
+        registration.check_identity(identity)?;
         Ok(registration)
     }
 

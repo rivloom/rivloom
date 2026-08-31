@@ -13,6 +13,7 @@ use super::secret_store::{SecretBackend, SecretField, VaultError};
 use super::server::{Server, now};
 use super::storage::BrainStore;
 use super::tls::{Peer, ServerTls, TlsChannel};
+use super::trust::TrustDescriptor;
 use super::wire::{Operation, Reply, Request, Response};
 
 #[derive(Default)]
@@ -41,6 +42,7 @@ impl SecretBackend for Memory {
 pub(super) struct Fixture {
     pub(super) server: Server,
     pub(super) peer: Peer,
+    pub(super) descriptor: TrustDescriptor,
     pub(super) owner: IssuedCredential,
     pub(super) host: Arc<Host>,
     pub(super) now: i64,
@@ -76,10 +78,18 @@ pub(super) fn fixture() -> Fixture {
     )
     .unwrap();
     let server = Server::start(host.clone(), tls, "127.0.0.1:0".parse().unwrap()).unwrap();
+    let descriptor = TrustDescriptor::new(
+        "brain-1".into(),
+        server.address,
+        "localhost".into(),
+        cert.clone(),
+    )
+    .unwrap();
     let peer = Peer::new(server.address, "localhost".into(), cert, pin).unwrap();
     Fixture {
         server,
         peer,
+        descriptor,
         owner,
         host,
         now,
