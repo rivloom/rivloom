@@ -24,11 +24,58 @@ export type RunStatus =
   | "failed"
   | "outcomeUnknown";
 
+export type PatchArtifactState =
+  | "empty"
+  | "complete"
+  | "tooLarge"
+  | "unsupportedEncoding";
+
+export type PatchArtifactMetadata = {
+  baselineCommit: string;
+  state: PatchArtifactState;
+  limitBytes: number;
+  byteCount: number | null;
+  sha256: string | null;
+};
+
+export type RunReceiptOutcome =
+  | "success"
+  | "failed"
+  | "cancelled"
+  | "outcomeUnknown";
+
+export type TestExecution = {
+  name: string;
+  exitCode: number;
+};
+
+export type TestReport =
+  | { state: "notReported" }
+  | { state: "reported"; executions: TestExecution[] };
+
+export type RunReceipt = {
+  schemaVersion: number;
+  taskId: string;
+  runId: string;
+  nodeId: string;
+  runtimeId: string;
+  runtimeVersion: string;
+  startedAt: number;
+  finishedAt: number;
+  outcome: RunReceiptOutcome;
+  summary: string | null;
+  error: string | null;
+  tests: TestReport;
+  patch: PatchArtifactMetadata;
+  contentSha256: string;
+};
+
 export type RunRecord = {
   id: string;
   status: RunStatus;
   summary: string | null;
   error: string | null;
+  receipt: RunReceipt | null;
 };
 
 export type TaskEventKind =

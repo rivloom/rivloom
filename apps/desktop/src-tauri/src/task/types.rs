@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::receipt::RunReceipt;
+
 pub(crate) const MAX_GOAL_BYTES: usize = 4 * 1024;
 pub(crate) const MAX_CONSTRAINTS: usize = 32;
 pub(crate) const MAX_CONSTRAINT_BYTES: usize = 1024;
@@ -60,6 +62,8 @@ pub(crate) struct RunRecord {
     pub(crate) status: RunStatus,
     pub(crate) summary: Option<String>,
     pub(crate) error: Option<String>,
+    #[serde(default)]
+    pub(crate) receipt: Option<RunReceipt>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
