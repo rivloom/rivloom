@@ -8,6 +8,7 @@ mod host_profile;
 mod hosting;
 mod invitation;
 mod node;
+mod node_registration;
 mod protocol;
 mod reconcile;
 mod secret_store;
