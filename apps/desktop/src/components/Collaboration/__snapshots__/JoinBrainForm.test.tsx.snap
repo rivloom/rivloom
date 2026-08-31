@@ -1,0 +1,47 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`clears invitation before validation completes, blocks duplicate submit, and never retries a failure > bounded join error 1`] = `
+<p
+  class="_error_1ee605"
+  role="alert"
+>
+  无法加入：请检查公开描述、独立指纹及邀请的 Brain 和有效期。未自动重试。
+</p>
+`;
+
+exports[`does not accept the preview fingerprint as independent confirmation > untrusted identity preview 1`] = `
+<dl
+  class="_details_1ee605"
+>
+  <div>
+    <dt>
+      Brain ID
+    </dt>
+    <dd>
+      <code>
+        brain-a
+      </code>
+    </dd>
+  </div>
+  <div>
+    <dt>
+      连接地址 / TLS 名称
+    </dt>
+    <dd>
+      <code>
+        127.0.0.1:7443 / localhost
+      </code>
+    </dd>
+  </div>
+  <div>
+    <dt>
+      证书 SHA-256 指纹
+    </dt>
+    <dd>
+      <code>
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      </code>
+    </dd>
+  </div>
+</dl>
+`;
