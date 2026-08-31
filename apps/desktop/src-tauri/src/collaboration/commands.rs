@@ -9,7 +9,7 @@ use super::secret_store::{NativeVault, SecretBackend};
 use crate::identity::IdentityService;
 
 pub(crate) struct DesktopBrainState {
-    service: BrainService<Arc<dyn SecretBackend + Send + Sync>>,
+    pub(super) service: BrainService<Arc<dyn SecretBackend + Send + Sync>>,
 }
 
 impl DesktopBrainState {

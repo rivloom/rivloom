@@ -8,6 +8,7 @@ mod host_profile;
 mod hosting;
 mod invitation;
 mod node;
+pub(crate) mod node_commands;
 mod node_membership;
 mod node_registration;
 mod node_session;
