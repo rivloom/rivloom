@@ -21,6 +21,7 @@ use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_protocol::protocol::RealtimeOutputModality;
 use pretty_assertions::assert_eq;
+use serde_json::json;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -345,6 +346,78 @@ async fn thread_start_without_dynamic_tools_allows_without_experimental_api_capa
 }
 
 #[tokio::test]
+async fn bounded_thread_history_is_stable_but_full_view_remains_experimental() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let mut mcp = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .without_auto_env()
+        .build()
+        .await?;
+
+    let init = mcp
+        .initialize_with_capabilities(
+            default_client_info(),
+            Some(InitializeCapabilities {
+                experimental_api: false,
+                request_attestation: false,
+                opt_out_notification_methods: None,
+                mcp_server_openai_form_elicitation: false,
+                extensions: None,
+            }),
+        )
+        .await?;
+    let JSONRPCMessage::Response(_) = init else {
+        anyhow::bail!("expected initialize response, got {init:?}");
+    };
+
+    let thread_id = "01990a50-7ef8-7b21-ae07-b47f2ec86a84";
+    let request_id = mcp
+        .send_raw_request(
+            "thread/resume",
+            Some(json!({ "threadId": thread_id, "excludeTurns": true })),
+        )
+        .await?;
+    let error = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_error_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    assert_non_experimental_request(error, "no rollout found for thread id");
+
+    let request_id = mcp
+        .send_raw_request(
+            "thread/turns/list",
+            Some(json!({
+                "threadId": thread_id,
+                "itemsView": "summary",
+                "maxBytes": 262_144,
+            })),
+        )
+        .await?;
+    let error = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_error_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    assert_non_experimental_request(error, "thread not loaded");
+
+    let request_id = mcp
+        .send_raw_request(
+            "thread/turns/list",
+            Some(json!({ "threadId": thread_id, "itemsView": "full" })),
+        )
+        .await?;
+    let error = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_error_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    assert_experimental_capability_error(error, "thread/turns/list.itemsView.full");
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn thread_start_granular_approval_policy_requires_experimental_api_capability() -> Result<()>
 {
     let server = create_mock_responses_server_sequence_unchecked(Vec::new()).await;
@@ -408,4 +481,11 @@ fn assert_experimental_capability_error(error: JSONRPCError, reason: &str) {
         format!("{reason} requires experimentalApi capability")
     );
     assert_eq!(error.error.data, None);
+}
+
+fn assert_non_experimental_request(error: JSONRPCError, expected_message: &str) {
+    assert!(
+        error.error.message.contains(expected_message),
+        "unexpected error: {error:?}"
+    );
 }

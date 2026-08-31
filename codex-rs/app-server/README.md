@@ -174,7 +174,7 @@ Example with notification opt-out:
 - `threadSection/delete` — delete an existing custom section and atomically return its member threads to the unsectioned list; returns `{}`. The built-in pinned section cannot be deleted.
 - `thread/loaded/list` — list the thread ids currently loaded in memory.
 - `thread/read` — read a stored thread by id without resuming it; optionally include turns via `includeTurns`. The returned `thread` includes `status` (`ThreadStatus`), defaulting to `notLoaded` when the thread is not currently loaded. For loaded threads, experimental clients can use `canAcceptDirectInput` to determine whether `turn/start` and `turn/steer` are accepted; unloaded stored threads report `null` when that capability is unavailable.
-- `thread/turns/list` — experimental; page through a stored thread’s turn history without resuming it; supports cursor-based pagination with `sortDirection`, `itemsView`, `nextCursor`, and `backwardsCursor`.
+- `thread/turns/list` — page through a stored thread’s turn history without resuming it; stable clients can request summary or metadata-only pages, including a serialized result budget with `maxBytes`. The complete `itemsView: "full"` path remains experimental.
 - `thread/items/list` — experimental; page through persisted thread items without resuming the thread. Pass `turnId` to restrict results to one turn, or omit it to page items across the thread. The active thread store must support item pagination.
 - `thread/searchOccurrences` — experimental; find literal, case-insensitive matches in visible user messages and summary-selected final assistant messages within one paginated thread.
 - `thread/metadata/update` — patch stored thread metadata in sqlite; supports updating persisted `gitInfo` fields and experimental `projectId`, then returns the refreshed `thread`. Omit `projectId` to preserve assignment and pass an empty string to clear it.
@@ -362,7 +362,7 @@ Valid `personality` values are `"friendly"`, `"pragmatic"`, and `"none"`. When `
 
 To continue a stored session, call `thread/resume` with the `thread.id` you previously recorded. The response shape matches `thread/start`. When the stored session includes persisted token usage, the server emits `thread/tokenUsage/updated` immediately after the response so clients can render restored usage before the next turn starts. You can also pass the same configuration overrides supported by `thread/start`, including `approvalsReviewer`. On cold resume, approval policy and the active permission-profile ID select a source in this order: request override, latest persisted thread setting, current configured default. The persisted profile ID is resolved through the same config and requirements path as a `permissions` override. Threads without an active profile ID use current config instead of restoring their concrete historical permissions.
 
-By default, `thread/resume` includes the reconstructed turn history in `thread.turns`. Experimental clients can pass `excludeTurns: true` to return only thread metadata and live resume state, then call `thread/turns/list` separately if they want to page the turn history over the network. A cold paginated resume can still replay persisted `thread/tokenUsage/updated` when it can identify the corresponding stored turn; resuming an already-loaded thread waits for the next live update.
+By default, `thread/resume` includes the reconstructed turn history in `thread.turns`. Clients can pass `excludeTurns: true` to return only thread metadata and live resume state, then call `thread/turns/list` separately to page history over the network. A cold paginated resume can still replay persisted `thread/tokenUsage/updated` when it can identify the corresponding stored turn; resuming an already-loaded thread waits for the next live update.
 
 Paginated threads keep the same resume contract as legacy threads. A default resume materializes the full projected history into `thread.turns`; `excludeTurns: true` keeps that array empty and includes `turnsBackwardsCursor` and `itemsBackwardsCursor` for the durable history visible at the resume boundary. Pass each cursor directly to its matching list API with `sortDirection: "desc"`; the first page includes the row identified by the cursor, while newer records arrive through live notifications. Either cursor is `null` when there is no durable row yet.
 
@@ -586,25 +586,29 @@ Paginated threads can also use `includeTurns: true`, but clients should prefer
 } }
 ```
 
-### Example: List thread turns (experimental)
+### Example: List bounded thread turns
 
-Use `thread/turns/list` with `capabilities.experimentalApi = true` to page a stored thread’s turn history without resuming it. By default, results are sorted descending so clients can start at the present and fetch older turns with `nextCursor`. The response also includes `backwardsCursor`; pass it as `cursor` on a later request with `sortDirection: "asc"` to fetch turns newer than the first item from the earlier page.
+Use `thread/turns/list` to page a stored thread’s turn history without resuming it. By default, results are sorted descending so clients can start at the present and fetch older turns with `nextCursor`. The response also includes `backwardsCursor`; pass it as `cursor` on a later request with `sortDirection: "asc"` to fetch turns newer than the first item from the earlier page.
 
-Every returned `Turn` includes `itemsView`, which tells clients whether the `items` array was omitted intentionally (`notLoaded`), contains only summary items (`summary`), or contains every item available from persisted app-server history (`full`). Pass `itemsView` to choose the returned detail level; omitted `itemsView` defaults to `"summary"`.
+Every returned `Turn` includes `itemsView`, which tells clients whether the `items` array was omitted intentionally (`notLoaded`) or contains only the first user and final assistant summary items (`summary`). Omitted `itemsView` defaults to `"summary"`. The `full` view remains experimental and requires `capabilities.experimentalApi = true`.
 
-Paginated threads support the same views. Their `full` view is materialized from the paginated item projection before app-server returns the turn page.
+Set `maxBytes` to bound the serialized JSON-RPC result. The minimum accepted value is 256 KiB and the server caps larger budgets at 3 MiB. When needed, the server reduces the effective page size, returns a progressing `nextCursor`, safely truncates oversized UTF-8 summary content, and lists affected turn IDs in `truncatedTurnIds`. `maxBytes` supports `summary` and `notLoaded`, not `full`.
+
+Paginated and legacy threads use the same bounded result contract. Omitting `maxBytes` preserves the existing page-size behavior.
 
 ```json
 { "method": "thread/turns/list", "id": 24, "params": {
     "threadId": "thr_123",
-    "limit": 50,
+    "limit": 20,
     "sortDirection": "desc",
-    "itemsView": "summary"
+    "itemsView": "summary",
+    "maxBytes": 3145728
 } }
 { "id": 24, "result": {
     "data": [ ... ],
     "nextCursor": "older-turns-cursor-or-null",
-    "backwardsCursor": "newer-turns-cursor-or-null"
+    "backwardsCursor": "newer-turns-cursor-or-null",
+    "truncatedTurnIds": []
 } }
 ```
 

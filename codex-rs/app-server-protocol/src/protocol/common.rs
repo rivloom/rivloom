@@ -780,9 +780,9 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadReadResponse,
     },
-    #[experimental("thread/turns/list")]
     ThreadTurnsList => "thread/turns/list" {
         params: v2::ThreadTurnsListParams,
+        inspect_params: true,
         // Explicitly concurrent: this primarily reads append-only rollout storage.
         serialization: None,
         response: v2::ThreadTurnsListResponse,
@@ -2527,6 +2527,7 @@ mod tests {
                 limit: None,
                 sort_direction: None,
                 items_view: None,
+                max_bytes: None,
             },
         };
         assert_eq!(thread_turns_list.serialization_scope(), None);

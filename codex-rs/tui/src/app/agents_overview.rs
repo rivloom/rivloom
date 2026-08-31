@@ -157,6 +157,7 @@ impl App {
                                                     limit: Some(1),
                                                     sort_direction: None,
                                                     items_view: None,
+                                                    max_bytes: None,
                                                 },
                                             },
                                         )

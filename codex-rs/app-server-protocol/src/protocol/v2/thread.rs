@@ -395,7 +395,6 @@ pub struct ThreadResumeParams {
     /// When true, return only thread metadata and live-resume state without
     /// populating `thread.turns`. This is useful when the client plans to call
     /// `thread/turns/list` immediately after resuming.
-    #[experimental("thread/resume.excludeTurns")]
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exclude_turns: bool,
     /// When present, include a `thread/turns/list` page in the resume response
@@ -1672,7 +1671,7 @@ pub struct ThreadInjectItemsParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadInjectItemsResponse {}
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS, ExperimentalApi)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadTurnsListParams {
@@ -1687,8 +1686,14 @@ pub struct ThreadTurnsListParams {
     #[ts(optional = nullable)]
     pub sort_direction: Option<SortDirection>,
     /// How much item detail to include for each returned turn; defaults to summary.
+    #[experimental(nested)]
     #[ts(optional = nullable)]
     pub items_view: Option<TurnItemsView>,
+    /// Maximum serialized byte size for the response result. Values below 256 KiB
+    /// are rejected and values above 3 MiB are capped at 3 MiB.
+    /// Only summary and notLoaded item views support a byte budget.
+    #[ts(optional = nullable)]
+    pub max_bytes: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -1704,6 +1709,9 @@ pub struct ThreadTurnsListResponse {
     /// Use it with the opposite `sortDirection` to include the anchor turn again
     /// and catch updates to that turn.
     pub backwards_cursor: Option<String>,
+    /// Turn IDs whose summary content was truncated to satisfy `maxBytes`.
+    #[serde(default)]
+    pub truncated_turn_ids: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]

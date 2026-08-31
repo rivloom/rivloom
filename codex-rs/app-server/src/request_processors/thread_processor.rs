@@ -2942,7 +2942,18 @@ impl ThreadRequestProcessor {
             limit,
             sort_direction,
             items_view,
+            max_bytes,
         } = params;
+        let items_view = items_view.unwrap_or(TurnItemsView::Summary);
+        let requested_page_size = thread_turns_page_size(limit);
+        let budget = super::bounded_turn_history::turn_history_budget(
+            requested_page_size,
+            max_bytes,
+            items_view,
+        )?;
+        let page_size = budget
+            .map(|budget| budget.page_size)
+            .unwrap_or(requested_page_size);
         let thread_uuid = ThreadId::from_string(&thread_id)
             .map_err(|err| invalid_request(format!("invalid thread id: {err}")))?;
         match self
@@ -2959,9 +2970,10 @@ impl ThreadRequestProcessor {
                     .paginated_thread_turns_list_response(
                         thread_uuid,
                         cursor,
-                        limit,
+                        page_size,
                         sort_direction,
                         items_view,
+                        budget,
                     )
                     .await;
             }
@@ -3002,7 +3014,7 @@ impl ThreadRequestProcessor {
         } else {
             None
         };
-        build_thread_turns_page_response(
+        let response = build_thread_turns_page_response(
             &items,
             self.thread_watch_manager
                 .loaded_status_for_thread(&thread_uuid.to_string())
@@ -3011,11 +3023,12 @@ impl ThreadRequestProcessor {
             active_turn,
             ThreadTurnsPageOptions {
                 cursor: cursor.as_deref(),
-                limit,
+                limit: Some(page_size as u32),
                 sort_direction: sort_direction.unwrap_or(SortDirection::Desc),
-                items_view: items_view.unwrap_or(TurnItemsView::Summary),
+                items_view,
             },
-        )
+        )?;
+        super::bounded_turn_history::finalize_turn_history_response(response, budget)
     }
 
     async fn thread_search_occurrences_response_inner(
@@ -3081,12 +3094,11 @@ impl ThreadRequestProcessor {
         &self,
         thread_id: ThreadId,
         cursor: Option<String>,
-        limit: Option<u32>,
+        page_size: usize,
         sort_direction: Option<SortDirection>,
-        items_view: Option<TurnItemsView>,
+        items_view: TurnItemsView,
+        budget: Option<super::bounded_turn_history::TurnHistoryBudget>,
     ) -> Result<ThreadTurnsListResponse, JSONRPCErrorError> {
-        let items_view = items_view.unwrap_or(TurnItemsView::Summary);
-        let page_size = thread_turns_page_size(limit);
         let sort_direction = match sort_direction.unwrap_or(SortDirection::Desc) {
             SortDirection::Asc => StoreSortDirection::Asc,
             SortDirection::Desc => StoreSortDirection::Desc,
@@ -3141,11 +3153,13 @@ impl ThreadRequestProcessor {
                 .await,
             has_live_running_thread,
         );
-        Ok(ThreadTurnsListResponse {
+        let response = ThreadTurnsListResponse {
             data: turns,
             next_cursor: page.next_cursor,
             backwards_cursor: page.backwards_cursor,
-        })
+            truncated_turn_ids: Vec::new(),
+        };
+        super::bounded_turn_history::finalize_turn_history_response(response, budget)
     }
 
     // Older clients still request `itemsView: "full"` from turn pages. Keep this
@@ -3200,9 +3214,10 @@ impl ThreadRequestProcessor {
                 .paginated_thread_turns_list_response(
                     thread_id,
                     cursor.clone(),
-                    Some(THREAD_TURNS_MAX_LIMIT as u32),
+                    THREAD_TURNS_MAX_LIMIT,
                     Some(SortDirection::Asc),
-                    Some(TurnItemsView::Full),
+                    TurnItemsView::Full,
+                    None,
                 )
                 .await?;
             turns.extend(page.data);
@@ -3226,9 +3241,10 @@ impl ThreadRequestProcessor {
         self.paginated_thread_turns_list_response(
             thread_id,
             /*cursor*/ None,
-            params.limit,
+            thread_turns_page_size(params.limit),
             params.sort_direction,
-            params.items_view,
+            params.items_view.unwrap_or(TurnItemsView::Summary),
+            None,
         )
         .await
         .map(Into::into)
@@ -5359,6 +5375,7 @@ fn build_thread_turns_page_response(
         data: page.turns,
         next_cursor: page.next_cursor,
         backwards_cursor: page.backwards_cursor,
+        truncated_turn_ids: Vec::new(),
     })
 }
 
