@@ -3,6 +3,8 @@ mod app_server;
 mod identity;
 mod project;
 pub mod runtime_status;
+#[allow(dead_code)]
+mod task;
 
 use account::AccountCommand;
 use account::AccountState;
