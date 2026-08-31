@@ -1,0 +1,42 @@
+# Rivloom Runtime Host R3.3 验证记录
+
+日期：2026-08-31。状态：实现中，Gate R3 未通过。
+
+## 基线与拆分
+
+R3.2 #69/#70 已顺序普通 merge，主干为 `0245711c76`。
+独立主干 worktree 的 238 + 4 Rust、95 前端测试与 build、两组 Clippy、
+桌面格式检查和 diff 均通过。没有管理员绕过、force-push 或恢复 CI。
+R3.3 从该最新 origin/main 创建 `C:/project/opencohive/.worktrees/r3-3-brain-state`；
+主目录旧 main 及原有 Cargo.toml 改动不动。
+
+计划拆分为各自小于 800 行的依赖 PR：
+
+1. R3.3a：凭证/邀请状态的有界、严格恢复，拒绝重复键、错误身份关联、TTL 和撤销不一致。
+2. R3.3b：Brain 成员/Node/presence 和唯一修订号。
+3. R3.3c：Task 状态、发送者限定的重放与乱序保护。
+4. R3.3d：单写者、原子快照和失败恢复；超过 800 行时继续拆开审查单元。
+
+## 实现边界
+
+- 磁盘快照只保存允许的有界协作数据与 secret verifier，不保存 bearer secret 或 Runtime 数据。
+- 读取损坏/未知版本不得降级为空 Brain；初始化与恢复是不同入口。
+- 邀请消费、成员/凭证签发必须在同一快照提交后才向调用方返回 secret。
+- 单 Brain 对可观察变更发出统一修订号；重试同键同内容返回原结果，同键不同内容冲突。
+  不驱逐幂等历史后悄悄重执行；达到容量时拒绝新增操作。
+- 心跳以 Brain 收到时间计算有效期；离线不推断 Task 成败，恢复时不把旧心跳当作活连接。
+- 这里仍是本地核心。网络认证、加密、连接关闭/对账和两机 Gate R3 留在 R3.4；
+  R4 才接真实委派、接受关联与 Run 结果，不从远端任意状态声明授予执行权限。
+
+## 不可跳过的限制
+
+R3.3a 验证：新增 4 项恢复行为测试，`just test-rust` 242 + 4、
+`just check` 95 + build、两组 Clippy（`-D warnings`）通过。
+验证包含撤销/时钟/过期的恢复、身份与 TTL 不一致、重复键、容量和邀请消费重放。
+单独的注册表反序列化只供快照内部使用，完整文件的字节限长与完整性由后续存储层完成。
+快照哈希用于检测意外损坏，不提供对本机账号恶意篡改/回滚的密码学防护。
+
+`R2-FU1` Windows elevated 多 Home 共存和真实执行/取消、边界/cleanup 验收继续延期，
+Gate R4/Windows 可用性发布前必须补齐。当前仍 `on-request + auto_review`。
+不改 codex-rs、不恢复 CI、不处理 #37/#38，不提前引入第二 Runtime/Marketplace/Skill Directory，
+不使用子 agent。仓库级格式化与 Bazel 锁更新的既有 Python 启动器故障单独记录，不冒充通过。

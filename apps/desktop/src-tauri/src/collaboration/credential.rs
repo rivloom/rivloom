@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
@@ -69,12 +69,17 @@ pub(super) enum SecretPurpose {
     Invitation,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Clock {
     high_water_at: i64,
 }
 
 impl Clock {
+    pub(super) fn high_water_at(&self) -> i64 {
+        self.high_water_at
+    }
+
     /// The caller supplies trusted server time, never a timestamp from a peer.
     pub(super) fn observe(&mut self, now: i64) -> Result<(), AccessError> {
         if !timestamp(now) || now < self.high_water_at {
@@ -85,13 +90,26 @@ impl Clock {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct CredentialBinding {
     pub(super) brain_id: String,
     pub(super) member_id: String,
     pub(super) node_id: String,
     pub(super) device_id: String,
+}
+
+impl CredentialBinding {
+    fn valid(&self) -> bool {
+        [
+            &self.brain_id,
+            &self.member_id,
+            &self.node_id,
+            &self.device_id,
+        ]
+        .into_iter()
+        .all(|v| id(v))
+    }
 }
 
 #[derive(Debug)]
@@ -108,8 +126,14 @@ pub(super) struct ConnectionIdentity {
     verifier: [u8; 32],
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+impl ConnectionIdentity {
+    pub(super) fn binding(&self) -> &CredentialBinding {
+        &self.binding
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StoredCredential {
     binding: CredentialBinding,
     issued_at: i64,
@@ -119,15 +143,69 @@ struct StoredCredential {
 }
 
 // Not Clone: all connections and task gates must consult the same live authority.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", try_from = "CredentialSnapshot")]
 pub(super) struct CredentialRegistry {
     brain_id: String,
     clock: Clock,
     records: BTreeMap<String, StoredCredential>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CredentialSnapshot {
+    brain_id: String,
+    clock: Clock,
+    #[serde(deserialize_with = "super::snapshot::unique_map::<_, _, 64>")]
+    records: BTreeMap<String, StoredCredential>,
+}
+
+impl TryFrom<CredentialSnapshot> for CredentialRegistry {
+    type Error = AccessError;
+    fn try_from(value: CredentialSnapshot) -> Result<Self, Self::Error> {
+        if !id(&value.brain_id) || !timestamp(value.clock.high_water_at()) {
+            return Err(AccessError::Rejected);
+        }
+        let mut members = BTreeMap::new();
+        for (key, record) in &value.records {
+            if !record.binding.valid()
+                || record.binding.brain_id != value.brain_id
+                || key != &record.binding.node_id
+                || !timestamp(record.issued_at)
+                || record.issued_at > value.clock.high_water_at()
+                || !timestamp(record.expires_at)
+                || record.issued_at.checked_add(CREDENTIAL_TTL_SECONDS) != Some(record.expires_at)
+                || members
+                    .insert(&record.binding.member_id, record.revoked)
+                    .is_some_and(|revoked| revoked != record.revoked)
+            {
+                return Err(AccessError::Rejected);
+            }
+        }
+        Ok(Self {
+            brain_id: value.brain_id,
+            clock: value.clock,
+            records: value.records,
+        })
+    }
+}
+
 impl CredentialRegistry {
+    pub(super) fn brain_id(&self) -> &str {
+        &self.brain_id
+    }
+    pub(super) fn high_water_at(&self) -> i64 {
+        self.clock.high_water_at()
+    }
+    pub(super) fn bindings(&self) -> impl Iterator<Item = &CredentialBinding> {
+        self.records.values().map(|record| &record.binding)
+    }
+    pub(super) fn is_revoked(&self, member_id: &str) -> bool {
+        self.records
+            .values()
+            .any(|record| record.binding.member_id == member_id && record.revoked)
+    }
+
     pub(super) fn new(brain_id: String) -> Result<Self, AccessError> {
         if !id(&brain_id) {
             return Err(AccessError::Rejected);
@@ -147,14 +225,7 @@ impl CredentialRegistry {
     ) -> Result<IssuedCredential, AccessError> {
         self.clock.observe(now)?;
         if binding.brain_id != self.brain_id
-            || ![
-                &binding.brain_id,
-                &binding.member_id,
-                &binding.node_id,
-                &binding.device_id,
-            ]
-            .into_iter()
-            .all(|v| id(v))
+            || !binding.valid()
             || self.records.contains_key(&binding.node_id)
             || self
                 .records

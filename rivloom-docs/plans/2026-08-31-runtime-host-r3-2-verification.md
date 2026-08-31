@@ -1,6 +1,6 @@
 # Rivloom Runtime Host R3.2 验证记录
 
-日期：2026-08-31。状态：R3.2 本地核心实现并通过自动化验证，PR 待审查合并；Gate R3 未通过。
+日期：2026-08-31。状态：R3.2 已合入 main 并完成主干复验；Gate R3 未通过。
 
 ## 基线与拆分
 
@@ -8,9 +8,9 @@
 `C:/project/opencohive/.worktrees/r3-2-node-credentials`。主目录旧 main 和其原有
 `apps/desktop/src-tauri/Cargo.toml` 改动保持不动。
 
-- R3.2a：[Draft PR #69](https://github.com/rivloom/rivloom/pull/69)，
+- R3.2a：[PR #69](https://github.com/rivloom/rivloom/pull/69)，
   `codex/r3-2-node-credentials` → main，`adea227c0b`，561 changed lines。
-- R3.2b：[Draft PR #70](https://github.com/rivloom/rivloom/pull/70)，实现提交 `8b91ef3951`，
+- R3.2b：[PR #70](https://github.com/rivloom/rivloom/pull/70)，实现提交 `8b91ef3951`，
   `codex/r3-2-single-use-invitations` → `codex/r3-2-node-credentials`，
   短期一次性邀请与成员/Node 兑换。先合并 #69，再将此 PR 重定到 main；各自低于 800 行。
 
@@ -99,4 +99,11 @@ Gate R4/Windows 可用性发布前必须补齐。当前仍为 `on-request + auto
 没有修改 codex-rs、恢复 CI、处理 #37/#38、引入第二 Runtime/Marketplace/Skill Directory，
 没有使用子 agent。
 
-下一步：审查并顺序合并两张 R3.2 PR，主干复验后开始 R3.3 Brain 状态存储、presence 与修订号。
+## 合并后复验
+
+#69/#70 已串行自审并顺序普通 merge，提交分别为 `6b138eada9`、`0245711c76`。
+#70 已重定到 main，512 changed lines；两张 head 均与已验证版本一致，未使用管理员绕过。
+独立 `r3-2-main-verification` worktree 在最新主干重新通过 238 + 4 Rust、
+95 前端与 build、两组 Clippy、桌面格式检查和 diff；现存 metadata/CLA 不代替全 CI。
+
+下一步：[R3.3 Brain 状态存储、presence 与修订号](2026-08-31-runtime-host-r3-3-verification.md)。
