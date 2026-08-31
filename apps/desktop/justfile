@@ -14,6 +14,7 @@ fmt:
 test-rust:
     cargo test --manifest-path src-tauri/Cargo.toml
     cargo test --manifest-path src-tauri/Cargo.toml --lib --features test-tauri-commands project::commands
+    cargo test --manifest-path src-tauri/Cargo.toml --lib --features test-tauri-commands collaboration::commands
 
 check-rust:
     cargo check --manifest-path src-tauri/Cargo.toml

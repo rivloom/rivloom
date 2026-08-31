@@ -1,6 +1,6 @@
 mod account;
 mod app_server;
-// R3 backend is not yet registered with desktop commands or automatic service startup.
+// Local Brain hosting is explicit; Node onboarding and collaboration UI remain separate work.
 #[allow(dead_code)]
 mod collaboration;
 mod identity;
@@ -160,6 +160,10 @@ fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send
         logout_account,
         get_identity,
         update_identity_display_name,
+        collaboration::commands::get_local_brain_status,
+        collaboration::commands::initialize_local_brain,
+        collaboration::commands::start_local_brain,
+        collaboration::commands::stop_local_brain,
         project::commands::list_recent_projects,
         project::commands::select_project,
         project::commands::remove_recent_project,
@@ -228,6 +232,13 @@ pub fn run() {
             if !app.manage(identity_service) {
                 return Err(std::io::Error::other("Identity service was already managed").into());
             }
+            let brain_state = collaboration::commands::DesktopBrainState::new(
+                app_data.join("collaboration").join("brain-host"),
+            )
+            .map_err(|_| std::io::Error::other("Brain state could not be initialized"))?;
+            if !app.manage(brain_state) {
+                return Err(std::io::Error::other("Brain state was already managed").into());
+            }
             let task_state = task::commands::create_task_state(
                 app.handle().clone(),
                 app_data.join("tasks").join("tasks-v1.json"),
@@ -253,6 +264,14 @@ pub fn run() {
         .expect("failed to build Rivloom desktop application");
 
     app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) && let Some(state) =
+            app_handle.try_state::<collaboration::commands::DesktopBrainState>()
+        {
+            state.shutdown();
+        }
         if matches!(
             event,
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
