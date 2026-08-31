@@ -112,6 +112,12 @@ impl Server {
         })
     }
 
+    pub(super) fn is_running(&self) -> bool {
+        self.worker
+            .as_ref()
+            .is_some_and(|worker| !worker.is_finished())
+    }
+
     pub(super) fn stop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(worker) = self.worker.take() {

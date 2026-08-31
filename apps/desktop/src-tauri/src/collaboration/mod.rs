@@ -3,6 +3,8 @@ mod brain_tasks;
 mod client;
 mod credential;
 mod host;
+mod host_profile;
+mod hosting;
 mod invitation;
 mod node;
 mod protocol;
