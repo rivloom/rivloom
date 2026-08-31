@@ -404,7 +404,7 @@ impl Receipt {
     }
 }
 
-fn id(value: &str) -> bool {
+pub(super) fn id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value
@@ -423,7 +423,7 @@ fn hex(value: &str, length: usize) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn timestamp(value: i64) -> bool {
+pub(super) fn timestamp(value: i64) -> bool {
     (0..=253_402_300_799).contains(&value)
 }
 

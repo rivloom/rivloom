@@ -1,1 +1,2 @@
+mod credential;
 mod protocol;

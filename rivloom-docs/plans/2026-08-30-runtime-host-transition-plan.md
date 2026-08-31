@@ -18,7 +18,7 @@
 | R0 路线收尾        | 已进入 `main`                                | 无                                                  |
 | R1 身份分离        | 已合入 main 并完成主干验证                    | 无                                                  |
 | R2 单机 Task Run   | 已接受收口；带已知 Windows Runtime 限制          | `R2-FU1` 在 Gate R4 前补做真实 Runtime Gate           |
-| R3 最小 Brain      | R3.1 已实现并验证；PR 待审查合并             | R3.2 邀请、成员与 Node 凭证；Gate R3 尚未通过       |
+| R3 最小 Brain      | R3.1 已合并并完成主干验证；R3.2 实现中       | R3.2 邀请、成员与 Node 凭证；Gate R3 尚未通过       |
 | R4 远端委派        | 未开始                                       | 依赖 Gate R3                                        |
 | R5 Artifact 审查   | 未开始                                       | 依赖 Gate R4                                        |
 | R6 第二 Runtime    | 未开始                                       | 依赖 Gate R5，并先完成许可证与产品能力评审          |
@@ -61,7 +61,8 @@ Runtime 审批策略、严格安全边界和恢复条件由
 ## 2. 历史起点与当前主干
 
 R1/R2 的 20 个 PR 已合入 `8140f7c46b` 并完成主干验证。R3.1 从该远端主干的
-独立 worktree 开始；实现和验证见 [R3.1 记录](2026-08-31-runtime-host-r3-1-verification.md)。
+独立 worktree 开始，#67/#68 已合入 `4b4d5f7839` 并复验；
+实现和验证见 [R3.1 记录](2026-08-31-runtime-host-r3-1-verification.md)。
 以下保留迁移开始时的历史起点，不代表当前主干仍缺少 R1/R2。
 
 截至 `origin/main` 的 `5a8f909bb7f9b10e9a0298bb7564f92c578862a6`（PR #39）：
@@ -342,8 +343,8 @@ cargo test account
 
 ### Task R3.1：冻结协作协议 v1
 
-已实现并验证，拆为基础契约和回执/Artifact 两个小 PR；协议见
-[Collaboration protocol v1](collaboration-protocol-v1.md)。尚未实现 R3.2–R3.4 或接受 Gate R3。
+已实现并合并，拆为基础契约和回执/Artifact 两个小 PR；协议见
+[Collaboration protocol v1](collaboration-protocol-v1.md)。尚未接受 Gate R3。
 
 **Files:**
 
@@ -360,6 +361,9 @@ cargo test account
 - golden payload 不含绝对路径、Token、完整日志或 App Server 原始消息。
 
 ### Task R3.2：实现邀请、成员和 Node 凭证
+
+实现与边界见 [R3.2 记录](2026-08-31-runtime-host-r3-2-verification.md)。
+拆为节点凭证与邀请兑换两个 PR；本地核心不等于网络接线或两机验收。
 
 **Files:**
 

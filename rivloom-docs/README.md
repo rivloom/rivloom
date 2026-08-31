@@ -14,6 +14,8 @@ directory, which is reserved for upstream Codex documentation.
   and the authorization boundaries for subsequent Brain/Node work.
 - [R3.1 verification](plans/2026-08-31-runtime-host-r3-1-verification.md) records the protocol PRs,
   local validation, security review and deferred runtime/transport gates.
+- [R3.2 verification](plans/2026-08-31-runtime-host-r3-2-verification.md) records invitation and node
+  credential boundaries, revocation evidence and the remaining secure transport requirements.
 - [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)
   records the current local implementation, automated evidence, publication state, and remaining
   native smoke checks.
