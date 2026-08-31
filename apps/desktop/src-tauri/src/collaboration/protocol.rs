@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 
 const MAX_MESSAGE_BYTES: usize = 32 * 1024;
 const MAX_PATCH_BYTES: u64 = 512 * 1024;
-const MAX_REVISION: u64 = 9_007_199_254_740_991;
+pub(super) const MAX_REVISION: u64 = 9_007_199_254_740_991;
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 // Serde's derived unit enums also accept {"variant": null}; v1 only accepts strings.
