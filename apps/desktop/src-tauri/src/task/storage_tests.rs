@@ -41,6 +41,24 @@ fn save_load_round_trip_is_versioned_bounded_and_contains_no_runtime_secrets() {
 }
 
 #[test]
+fn local_project_binding_round_trips_as_an_opaque_id_and_rejects_paths() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let store = store(&temp_dir);
+    let mut task = stored_task(1);
+    task.project_id = Some(format!("project-v1-{}", "a".repeat(64)));
+
+    store.save(&[task.clone()]).unwrap();
+
+    assert_eq!(store.load().unwrap(), vec![task.clone()]);
+    let contents = fs::read_to_string(&store.path).unwrap();
+    assert!(contents.contains(task.project_id.as_deref().unwrap()));
+    assert!(!contents.contains("projectPath"));
+
+    task.project_id = Some("C:\\private\\workspace".to_string());
+    assert_eq!(store.save(&[task]), Err(StorageError::InvalidData));
+}
+
+#[test]
 fn oversized_event_history_is_rejected_without_writing() {
     let temp_dir = tempfile::tempdir().unwrap();
     let store = store(&temp_dir);
@@ -165,6 +183,7 @@ fn store(temp_dir: &TempDir) -> TaskStore {
 fn stored_task(index: usize) -> StoredTask {
     StoredTask {
         idempotency_key: format!("task-key-{index}"),
+        project_id: None,
         record: TaskRecord {
             id: format!("task-{index}"),
             spec: TaskSpec::new(format!("goal-{index}"), vec!["bounded".to_string()]),

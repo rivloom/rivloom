@@ -8,7 +8,11 @@ use tauri::Emitter;
 
 use crate::account::AccountService;
 use crate::app_server::ConnectionControl;
+use crate::app_server::ConnectionIdentity;
+use crate::app_server::NotificationObserver;
+use crate::app_server::event_router::EventRouter;
 use crate::app_server::process::AppServerSupervisor;
+use crate::app_server::process::ConnectionObserver;
 use crate::app_server::process::StatusObserver;
 use crate::app_server::transport::TauriProcessLauncher;
 use crate::app_server::transport::log_diagnostic;
@@ -28,14 +32,19 @@ impl AppServerState {
         app_handle: AppHandle,
         codex_home: PathBuf,
         account_service: AccountService,
+        events: Arc<EventRouter>,
     ) -> Self {
         let status = Arc::new(RuntimeStatusStore::new(app_handle.clone()));
         let observer: Arc<dyn StatusObserver> = status.clone();
         let launcher = Box::new(TauriProcessLauncher::new(app_handle, codex_home));
         let account_service = Arc::new(account_service);
+        let app_server_observer = Arc::new(AppServerObserver {
+            account_service,
+            events: events.clone(),
+        });
         let mut supervisor = AppServerSupervisor::new(launcher, observer, INITIALIZATION_TIMEOUT);
-        supervisor.set_notification_observer(account_service.clone());
-        supervisor.set_connection_observer(account_service);
+        supervisor.set_notification_observer(app_server_observer.clone());
+        supervisor.set_connection_observer(app_server_observer);
 
         Self {
             supervisor: Mutex::new(supervisor),
@@ -74,6 +83,50 @@ impl AppServerState {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .shutdown()
+    }
+}
+
+struct AppServerObserver {
+    account_service: Arc<AccountService>,
+    events: Arc<EventRouter>,
+}
+
+impl NotificationObserver for AppServerObserver {
+    fn on_notification(
+        &self,
+        connection_identity: &ConnectionIdentity,
+        method: &str,
+        params: &serde_json::Value,
+    ) {
+        self.account_service
+            .on_notification(connection_identity, method, params);
+        self.events
+            .on_notification(connection_identity, method, params);
+    }
+
+    fn on_server_request(
+        &self,
+        connection_identity: &ConnectionIdentity,
+        request_id: &serde_json::Value,
+        method: &str,
+        params: &serde_json::Value,
+    ) {
+        self.account_service
+            .on_server_request(connection_identity, request_id, method, params);
+        self.events
+            .on_server_request(connection_identity, request_id, method, params);
+    }
+}
+
+impl ConnectionObserver for AppServerObserver {
+    fn on_connected(&self, connection: Arc<dyn ConnectionControl>) {
+        self.account_service.on_connected(connection.clone());
+        self.events.on_connected(connection);
+    }
+
+    fn on_disconnected(&self) {
+        self.account_service.on_disconnected();
+        self.events.on_disconnected();
     }
 }
 
@@ -133,3 +186,7 @@ fn log_runtime_status(status: &RuntimeStatus) {
         RuntimeStatus::Stopped => log_diagnostic("status", "stopped"),
     }
 }
+
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod tests;

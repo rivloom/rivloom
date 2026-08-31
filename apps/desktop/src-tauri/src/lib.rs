@@ -8,9 +8,12 @@ pub mod runtime_status;
 #[allow(dead_code)]
 mod task;
 
+use std::sync::Arc;
+
 use account::AccountCommand;
 use account::AccountState;
 use account::CodexRuntimeAuthStatus;
+use app_server::event_router::EventRouter;
 use app_server::state::AppServerState;
 use identity::IdentityService;
 use identity::IdentityServiceError;
@@ -187,7 +190,13 @@ pub fn run() {
             if !app.manage(account_state) {
                 return Err(std::io::Error::other("Account state was already managed").into());
             }
-            let state = AppServerState::new(app.handle().clone(), codex_home, account_service);
+            let task_events = Arc::new(EventRouter::default());
+            let state = AppServerState::new(
+                app.handle().clone(),
+                codex_home,
+                account_service,
+                task_events,
+            );
             if !app.manage(state) {
                 return Err(std::io::Error::other("App Server state was already managed").into());
             }
