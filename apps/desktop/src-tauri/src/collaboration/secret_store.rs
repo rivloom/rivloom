@@ -7,6 +7,8 @@ use super::protocol::{id, timestamp};
 
 const MAX_SECRET_BYTES: usize = 1024;
 const PREFIX: &str = "Rivloom/node/v1/";
+pub(super) const SERVER_KEY_PREFIX: &str = "Rivloom/brain-tls/v1/";
+pub(super) const MAX_VAULT_BYTES: usize = 2560;
 
 /// Explicit secret field for OS vault blobs and established TLS frames only, never UI/state DTOs.
 #[derive(Debug)]
@@ -144,9 +146,12 @@ mod windows {
     static WRITER: Mutex<()> = Mutex::new(());
 
     fn wide(target: &str) -> Result<Vec<u16>, VaultError> {
-        if target.len() != PREFIX.len() + 64
-            || !target.starts_with(PREFIX)
-            || !target[PREFIX.len()..]
+        let suffix = target
+            .strip_prefix(PREFIX)
+            .or_else(|| target.strip_prefix(SERVER_KEY_PREFIX))
+            .ok_or(VaultError::Invalid)?;
+        if suffix.len() != 64
+            || !suffix
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
         {
@@ -185,7 +190,7 @@ mod windows {
             let result = if record.Type != CRED_TYPE_GENERIC
                 || record.Persist != CRED_PERSIST_LOCAL_MACHINE
                 || length == 0
-                || length > MAX_SECRET_BYTES
+                || length > MAX_VAULT_BYTES
                 || record.CredentialBlob.is_null()
             {
                 Err(VaultError::Invalid)
@@ -202,7 +207,7 @@ mod windows {
         }
         fn write_new(&self, target: &str, bytes: &[u8]) -> Result<(), VaultError> {
             let _guard = WRITER.lock().map_err(|_| VaultError::Unavailable)?;
-            if bytes.is_empty() || bytes.len() > MAX_SECRET_BYTES {
+            if bytes.is_empty() || bytes.len() > MAX_VAULT_BYTES {
                 return Err(VaultError::Invalid);
             }
             if self.read(target)?.is_some() {

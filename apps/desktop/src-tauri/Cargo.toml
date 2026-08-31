@@ -18,9 +18,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22.1"
 dunce = "1"
 fs2 = "0.4.3"
 getrandom = "0.3.4"
+rcgen = { version = "=0.14.7", default-features = false, features = ["crypto", "ring", "zeroize"] }
 rustls = { version = "0.23.43", default-features = false, features = ["std", "ring"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -31,6 +33,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-shell = "2"
 thiserror = "2"
+time = { version = "=0.3.45", default-features = false }
 zeroize = "1.9"
 
 [target.'cfg(windows)'.dependencies]
@@ -38,6 +41,5 @@ windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32
 
 [dev-dependencies]
 pretty_assertions = "1"
-rcgen = { version = "=0.14.7", default-features = false, features = ["crypto", "ring"] }
 tauri = { version = "2", features = ["test"] }
 tempfile = "3"

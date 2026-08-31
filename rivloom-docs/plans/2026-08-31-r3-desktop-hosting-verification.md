@@ -11,7 +11,7 @@ TypeScript/Vite、两组 Clippy 和桌面格式检查通过。原主目录旧 ma
 本轮从最新 origin/main 新建 `C:/project/opencohive/.worktrees/r3-desktop-hosting`。
 分批实现并逐批验证，每张 PR 小于 800 行：
 
-1. 可导出/检查的公开信任资料，以及独立指纹确认后的 peer 构造。
+1. [PR #82](https://github.com/rivloom/rivloom/pull/82)，326 行：公开信任资料及独立指纹确认。
 2. 服务端 TLS 身份生成、OS 保护及严格恢复。
 3. 使用受管本机目录和已保护身份，显式启动/停止 Brain 的桌面托管层。
 
@@ -33,6 +33,23 @@ TypeScript/Vite、两组 Clippy 和桌面格式检查通过。原主目录旧 ma
 首批新增 5 项测试覆盖显式确认、证书替换、畸形/超限资料、公开字段隔离及真实 Windows
 loopback TLS 往返。310 + 4 Rust、95 前端 + build、两组 Clippy 和桌面格式检查通过。
 仓库级 `just fmt` 仍因既有 Python 启动器故障失败；不计为通过，不修改 codex-rs。
+
+## 受保护的服务端 TLS 身份
+
+- 本机显式生成 P-256 自签名 ServerAuth 证书，签发起 30 天有效，notBefore 回溯 5 分钟。
+  使用已锁定 rcgen 0.14.7/ring，不设计新的密码学协议；启用 rcgen 的 zeroize 并包装其序列化密钥。
+- 单个 `Rivloom/brain-tls/v1/<Brain ID SHA-256>` OS 槽保存版本、Brain/name、时间、证书和私钥。
+  使用 [Windows generic credential](https://learn.microsoft.com/en-us/windows/win32/api/wincred/ns-wincred-credentialw)，
+  当前用户/本机作用域，上限 2560 字节。Node 文档自身仍保持 1 KiB 上限及独立命名空间。
+- 私钥、编码和读回缓冲清零；没有私钥 Debug/公开 DTO 或普通文件保存入口。
+- 已存在槽拒绝创建，不自动轮换 pin；只允许 endpoint 变化时复用同一证书，仍须核对新地址。
+- 恢复核对版本、Brain、时间、大小和密钥格式，用 Rustls 正常 verifier 校验证书名称/时间，
+  并由 Rustls 检查证书/私钥匹配。不实现跳过验证器或明文 fallback。
+- 非 Windows 原生后端仍明确不可用；不宣称防御同 Windows 账号恶意进程或实现跨进程 CAS。
+- 新增 5 项测试，315 + 4 Rust、95 前端 + build、两组 Clippy 及桌面格式通过。
+  原生测试只创建随机命名的合成 TLS 身份槽，结束清理；客户端实际证书校验通过真实 loopback TLS 验证。
+- rcgen 从测试依赖移到生产依赖；base64/time 使用已有锁定版本，Cargo.lock 未增加或升级包。
+  必须执行的 Bazel 锁更新与上游格式化仍被既有 Python 启动器故障阻塞，MODULE.bazel.lock 未变。
 
 ## 必须保留的后续 Gate
 
