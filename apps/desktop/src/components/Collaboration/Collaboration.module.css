@@ -115,6 +115,11 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.button[aria-pressed="true"] {
+  background: var(--color-surface-muted);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
 .primary {
   background: var(--color-accent);
   color: var(--color-on-accent, #fff);

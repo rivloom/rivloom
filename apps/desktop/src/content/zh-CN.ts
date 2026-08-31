@@ -8,7 +8,7 @@ export const zhCN = {
     label: "主要导航",
     overview: "概览",
     stageLabel: "当前阶段",
-    stageTitle: "身份与 Runtime",
+    stageTitle: "身份、Brain 与 Runtime",
     stageDescription: "分离协作身份与模型执行凭据，建立清晰的本机边界。",
     projectStage: {
       title: "本地项目与任务",
@@ -19,10 +19,10 @@ export const zhCN = {
     eyebrow: "Rivloom Desktop",
     title: "身份属于 Rivloom，模型执行交给 Codex Runtime",
     description:
-      "本机身份用于未来的成员、设备与协作关系；ChatGPT 登录只授权当前 Node 上的 Codex Runtime。",
+      "本机身份用于成员、设备与协作关系；ChatGPT 登录只授权当前 Node 上的 Codex Runtime。",
     privacyLabel: "两种身份，各守边界",
     privacyDescription:
-      "Rivloom 不把 Runtime 凭据当作成员身份，也不会把它发送给未来的 Brain。",
+      "Rivloom 不把 Runtime 凭据当作成员身份，也不会把它发送给 Brain。",
   },
   projectOverview: {
     eyebrow: "Rivloom Local",
@@ -252,7 +252,7 @@ export const zhCN = {
     badge: {
       loading: "正在读取",
       error: "暂不可用",
-      local: "仅此设备",
+      local: "本机身份",
       brain: "Brain 成员",
     },
     loading: {
@@ -260,8 +260,8 @@ export const zhCN = {
     },
     local: {
       description:
-        "这是独立于 Runtime 登录的本机协作身份；加入 Brain 前只在此设备生效。",
-      unjoined: "尚未加入 Brain",
+        "这是独立于 Runtime 登录的本机协作身份；成员权限以 Brain 的认证与对账结果为准。",
+      unjoined: "连接状态见下方协作区",
     },
     brain: {
       description: "此身份已建立 Brain 成员关系，可用于后续委派与审查。",
@@ -282,7 +282,7 @@ export const zhCN = {
     },
   },
   runtimeSection: {
-    eyebrow: "02 / Runtime host",
+    eyebrow: "03 / Runtime host",
     title: "Codex Runtime",
     description:
       "负责本机模型执行与 ChatGPT 认证；登录状态不会改变 Rivloom 身份或 Brain 权限。",
