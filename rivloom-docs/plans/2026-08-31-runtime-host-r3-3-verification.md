@@ -1,6 +1,6 @@
 # Rivloom Runtime Host R3.3 验证记录
 
-日期：2026-08-31。状态：实现中，Gate R3 未通过。
+日期：2026-08-31。状态：R3.3 本地核心已实现并验证，PR 待审查合并；Gate R3 未通过。
 
 ## 基线与拆分
 
@@ -10,14 +10,16 @@ R3.2 #69/#70 已顺序普通 merge，主干为 `0245711c76`。
 R3.3 从该最新 origin/main 创建 `C:/project/opencohive/.worktrees/r3-3-brain-state`；
 主目录旧 main 及原有 Cargo.toml 改动不动。
 
-计划拆分为各自小于 800 行的依赖 PR：
+拆分为各自小于 800 行的依赖 PR：
 
 1. R3.3a：[PR #71](https://github.com/rivloom/rivloom/pull/71)，403 行；
    凭证/邀请状态的有界、严格恢复，拒绝重复键、错误身份关联、TTL 和撤销不一致。
 2. R3.3b：[PR #72](https://github.com/rivloom/rivloom/pull/72)，610 行；
    Brain 成员/Node/presence 和唯一修订号。
-3. R3.3c：Task 状态、发送者限定的重放与乱序保护。
-4. R3.3d：单写者、原子快照和失败恢复；超过 800 行时继续拆开审查单元。
+3. R3.3c：[PR #73](https://github.com/rivloom/rivloom/pull/73)，636 行；
+   Task 状态、发送者限定的重放与乱序保护。
+4. R3.3d：[PR #74](https://github.com/rivloom/rivloom/pull/74)，694 行；
+   单写者、原子快照和失败恢复。实现提交 `a6ff1fb117`，后续仅更新交接文档。
 
 ## 实现边界
 
@@ -30,7 +32,7 @@ R3.3 从该最新 origin/main 创建 `C:/project/opencohive/.worktrees/r3-3-brai
 - 这里仍是本地核心。网络认证、加密、连接关闭/对账和两机 Gate R3 留在 R3.4；
   R4 才接真实委派、接受关联与 Run 结果，不从远端任意状态声明授予执行权限。
 
-## 不可跳过的限制
+## 验证证据与限制
 
 R3.3a 验证：新增 4 项恢复行为测试，`just test-rust` 242 + 4、
 `just check` 95 + build、两组 Clippy（`-D warnings`）通过。
@@ -58,6 +60,36 @@ messageId、sentAt、最后已见 revision 不参与业务 fingerprint，重试�
 恢复保留 Task 状态和重放结果；presence 过期/重启不会推断 Task 成败，也不会重新调用 Runtime。
 新增 7 项 Task/重放行为测试，`just test-rust` 254 + 4、`just check` 95 + build、
 两组 Clippy（`-D warnings`）、桌面格式与 diff 检查通过。
+
+R3.3d 的 BrainStore 接入整份状态的事务提交：
+
+- `create` 与 `open` 分开；OS 独占锁保持到 Store drop，持久 lock 标记不删除。
+  已有标记即使快照丢失也不能重新初始化，避免重置撤销/消费记录；初始化写失败须人工检查。
+- 完整文件先限长到 4 MiB + 1 KiB，内层 Brain JSON 限 2 MiB；版本、SHA-256 和语义全部验证。
+  内层保留原始 JSON 文本再严格解析，不能经 Value 丢失重复键。损坏原文件不重命名、不覆盖。
+- 业务操作在候选副本执行，拒绝或候选校验失败时回滚业务变化但保存可信时钟；提交前不返回 secret/确认。
+  同目录临时文件 sync 后一次替换；失败一律停止当前 Store，重开后按完整磁盘状态恢复。
+  对替换前失败和替换已完成后报错均有故障注入，后者不会从旧内存重试邀请兑换。
+- 打开后提交 Restart presence 清理；Task 状态与幂等记录保留，不自动重新执行 Run。
+  每次事务检测文件是否被本 writer 以外改动，发现后拒绝覆盖。
+- 路径只接收本机应用控制的绝对目录；目标/锁文件及末级目录拒绝符号链接。
+  Unix 新目录/文件使用 0700/0600，Windows 依赖应用私有目录继承 ACL；该目录不得由 peer 指定。
+  只面向本地磁盘和遵守文件锁的进程，不宣称抗同账号恶意修改、网络盘或物理断电验收。
+
+文件锁使用 [fs2 0.4.3](https://docs.rs/fs2/latest/fs2/trait.FileExt.html)，保留 Rust 1.85 兼容 API。
+Windows 使用 [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
+的 REPLACE_EXISTING/WRITE_THROUGH，不允许跨卷复制或延迟重启；Unix 使用 rename + 目录 sync。
+本轮只在 Windows 执行测试，没有把其他 OS 或实际断电测试记为通过。
+新增 9 项存储测试；最终 `just test-rust` 263 + 4、`just check` 95 + build、
+两组 Clippy（`-D warnings`）、桌面格式检查通过。R3.3 共新增 25 项行为测试。
+四张 PR 均完成串行自审，保持 Draft 等待审查合并；没有新增模型上下文或变更对外协议形状。
+锁文件只新增 fs2，未升级其他依赖；所需 `just bazel-lock-update` 和上游 `just fmt`
+仍因既有失效 Python 启动器失败，未生成 MODULE.bazel.lock 更新，不计为通过。
+
+以上快照仅用于本地存储，不是可分享的协议帧；其中有 verifier，R3.4 必须使用独立的可见数据投影。
+没有注册 Tauri 命令、监听端口、发送网络数据或调用 Runtime。
+限速、owner 管理鉴权接线、Node secret 安全存储、加密通道和两机验收仍是后续门禁。
+下一步：顺序合并 R3.3 PR 并复验最新主干，再进入 R3.4 Node 连接与对账。
 
 `R2-FU1` Windows elevated 多 Home 共存和真实执行/取消、边界/cleanup 验收继续延期，
 Gate R4/Windows 可用性发布前必须补齐。当前仍 `on-request + auto_review`。

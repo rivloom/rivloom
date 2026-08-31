@@ -4,6 +4,7 @@ mod credential;
 mod invitation;
 mod protocol;
 mod snapshot;
+mod storage;
 
 #[cfg(test)]
 #[path = "authority_restore_tests.rs"]
