@@ -1,6 +1,6 @@
 # Gate R3：Node 桌面接线验证
 
-日期：2026-08-31。状态：Node 登记、会话、邀请及桌面命令已实现，分批待合并；Gate R3 未通过。
+日期：2026-08-31。状态：Node 登记、会话、邀请及桌面命令已实现，Draft #86–#89 待合并；Gate R3 未通过。
 
 ## 已合并基线
 
@@ -11,7 +11,8 @@
 
 分批 PR：[登记 #86](https://github.com/rivloom/rivloom/pull/86) 434 行；
 [会话 #87](https://github.com/rivloom/rivloom/pull/87) 538 行；
-[owner/邀请 #88](https://github.com/rivloom/rivloom/pull/88) 417 行；桌面命令独立发布。
+[owner/邀请 #88](https://github.com/rivloom/rivloom/pull/88) 417 行；
+[桌面命令 #89](https://github.com/rivloom/rivloom/pull/89) 569 行。
 
 ## 第一阶段：持久化 Node 登记
 
@@ -92,6 +93,8 @@ transport / credential / rejected / unavailable。UI 不得对 uncertain Join �
 Node service 和连接/加入/邀请命令已接线，UI 仍待实现。所有网络操作显式触发，不自动确认信任、重新加入、
 重试管理操作或调用 Runtime。邀请 UI 需要短时、一次性呈现 secret，禁止写入持久化状态、日志和错误。
 TLS/Node 凭证过期与不完整初始化的恢复流程、真实两 Windows 设备验收仍未完成。
+Runtime capability announcement 的桌面接线尚未暴露；此批不猜测或自动发布 Runtime 能力。
+非 Windows 原生 vault 仍不可用，没有跨平台原生验收声明。
 
 R2-FU1 elevated 多 Home 共存与真实执行/取消/边界/cleanup 验收继续延期，在 Gate R4 前必须补齐。
 不修改 codex-rs，不恢复 CI，不处理 #37/#38，不进入 R4/第二 Runtime/Marketplace/Skill Directory。
