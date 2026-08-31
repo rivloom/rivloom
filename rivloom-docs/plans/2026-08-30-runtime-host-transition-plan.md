@@ -18,7 +18,7 @@
 | R0 路线收尾        | 已进入 `main`                                | 无                                                  |
 | R1 身份分离        | 已合入 main 并完成主干验证                    | 无                                                  |
 | R2 单机 Task Run   | 已接受收口；带已知 Windows Runtime 限制          | `R2-FU1` 在 Gate R4 前补做真实 Runtime Gate           |
-| R3 最小 Brain      | R3.1–R3.3 已合并复验；R3.4 实现中               | 完成 R3.4 及真实两机验收；Gate R3 尚未通过       |
+| R3 最小 Brain      | R3.1–R3.3 已合并复验；R3.4 后端已验证、待合并   | 补齐桌面托管与真实两机验收；Gate R3 尚未通过    |
 | R4 远端委派        | 未开始                                       | 依赖 Gate R3                                        |
 | R5 Artifact 审查   | 未开始                                       | 依赖 Gate R4                                        |
 | R6 第二 Runtime    | 未开始                                       | 依赖 Gate R5，并先完成许可证与产品能力评审          |
@@ -409,6 +409,8 @@ cargo test account
 ### Task R3.4：实现 Node 客户端和对账
 
 实现与分批验证见 [R3.4 记录](2026-08-31-runtime-host-r3-4-verification.md)。
+后端本机验证已完成；尚无桌面命令/自动监听及生产证书引导，两机 Gate R3 未验收。
+真实 TCP/TLS 组合测试位于私有 `server_tests.rs` / `client_tests.rs`，未扩大公开 crate API。
 
 **Files:**
 

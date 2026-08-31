@@ -1,6 +1,6 @@
 # Rivloom Runtime Host R3.4 验证记录
 
-日期：2026-08-31。状态：实现中；Gate R3 未通过。
+日期：2026-08-31。状态：后端实现及本机验证完成，待合并；Gate R3 未通过。
 
 ## 基线和实施顺序
 
@@ -17,8 +17,12 @@ R3.3 #71–#74 已顺序普通 merge 至 `ab72fcf5ffe9436ae30393be7a78b0f37a6d10
 3. [PR #77](https://github.com/rivloom/rivloom/pull/77)，738 行：TLS、证书身份固定和有界传输。
 4. [PR #78](https://github.com/rivloom/rivloom/pull/78)，470 行：Windows Node 凭证保护。
 5. [PR #79](https://github.com/rivloom/rivloom/pull/79)，694 行：Brain 认证服务、owner 鉴权和请求限流。
-6. TLS 监听生命周期与有界 worker。
-7. Node 客户端接线和两个 Node 的纵向传输测试。
+6. [PR #80](https://github.com/rivloom/rivloom/pull/80)，447 行：TLS 监听生命周期与有界 worker。
+7. [PR #81](https://github.com/rivloom/rivloom/pull/81)，621 行：Node 客户端接线和两个 Node 的纵向传输测试。
+
+#75–#81 均为 Draft，未合并；已串行自审，不代表独立他人批准。
+发布时发现 fork 的 gh 默认指向上游，导致两次创建请求被拒绝；显式指定目标后已正常发布。
+后续 gh 命令必须带 `-R rivloom/rivloom`，不能依赖工作目录推断仓库；未更换凭证或绕过访问控制。
 
 ## 对账和隐私边界
 
@@ -90,6 +94,24 @@ Windows loopback 测试暴露 accepted socket 继承非阻塞模式的问题，�
 最终 298 + 4 Rust、95 前端 + build、两组 Clippy 和桌面格式通过；失败回归日志另行保留。
 5 秒空闲读帧也会断开，调用方需及时 pulse 或显式重连；没有隐藏的自动重试。
 尚未注册 Tauri 命令、桌面 UI 或自动监听服务，不更改防火墙。
+
+R3.4g：Node 客户端串起 pinned TLS、OS vault 接口、认证和有界完整对账；最多读取 192 页。
+加入后必须先保存凭证，随后认证和对账全部成功才返回健康客户端。
+网络、协议、对账错误及 revision 冲突均断开连接，清除 readiness/未完成批次，保留完整视图与 pending。
+显式重连从最后完成 revision 对账，显式重发只更新 revision，不改已确认业务键或 payload/hash。
+owner 可创建/取消邀请及撤销成员；管理操作不自动重试。所有 IO 同步且有界，未来桌面托管必须移出 UI 线程。
+每个连接仍受 256 请求 ID 上限及空闲读帧超时约束；无自动重连、后台心跳或任务执行。
+新增 7 项真实 Windows loopback TLS 客户端测试，覆盖两个 Node 的邀请/认证/能力声明、双向 Task 隔离、
+丢弃业务确认后的原键重发、撤销后的旧/新连接拒绝、listener 停止、vault 保存失败的孤立成员恢复、
+取消邀请/普通成员越权及 revision 冲突后的显式重连。最终 305 + 4 Rust、95 前端 + build、
+两组 Clippy 和桌面格式检查通过。
+传输测试放在私有模块 `server_tests.rs` / `client_tests.rs`，使用真实 TCP/TLS、临时 BrainStore；
+没有为原计划的独立 integration test 文件扩大公开 crate API。客户端组合测试使用内存 vault，
+Windows 原生 vault 另有合成槽往返测试；丢失确认以丢弃已返回的应用确认模拟，不冒充跨机器断网。
+
+后端完成不等于桌面功能已可用：仍需显式桌面托管/命令、安全提供服务端证书私钥及离线可信 root/name/pin、
+凭证失效后的 owner 恢复流程和两台真实 Windows 设备验收。服务器 TLS 私钥目前由调用方注入，
+没有声称已实现生产证书签发、轮换、分发或私钥持久化。上述接线和 Gate R3 应先于 R4，不能提前开始远端执行。
 
 首版统一使用应用层 TLS（即使运行于 Tailscale），避免把私网 IP 当作加密/身份认证证明。
 根证书、服务端名称和预先可信获取的证书 pin 均需校验；不做首次连接自动信任，失败不降级明文。

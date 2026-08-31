@@ -1,6 +1,6 @@
 # Rivloom Collaboration Protocol v1
 
-状态：R3.1 #67/#68 已合并，2026-08-31；R3.2 已合并复验，R3.3 核心已验证，PR 待合并。
+状态：R3.1–R3.3 已合并复验，2026-08-31；R3.4 后端已本机验证、待合并；Gate R3 未通过。
 本协议属于 Rivloom，不复用 App Server 原始消息，也不修改本地 R2 存储格式。
 
 ## 范围与入口
@@ -11,12 +11,20 @@ R3.1 只定义数据消息；不监听端口、不连接 Brain、不调用 Runti
 原始 `Envelope` 是未验证的构造材料，不能直接作为网络入口或发送对象。
 
 - 每帧是一个 UTF-8 JSON 对象，含空白在内最多 **32 KiB**；接收在 JSON 解析前检查长度。
-  未来传输层还必须在缓冲/解压前限长，不能先读取无限流再调用解析器。
+  R3.4 将 Message 嵌入最多 64 KiB 的 TLS 控制帧，分配前校验 4 字节长度，不使用压缩。
 - 发送时校验字段和最终编码字节数。任何错误均拒绝整条消息，不截断、不降级、不部分执行。
 - 所有对象/带标签分支拒绝未知字段；重复字段、未知枚举、非整数计数和未知版本被拒绝。
   不接受任意 JSON 扩展包、原始日志、环境变量、Runtime 凭证、路径或 App Server payload 字段。
 - 对外错误只有 `InvalidMessage` 与 `MessageTooLarge`，不得记录原始解析错误或消息正文。
 - 可空字段允许省略或 `null`，输出统一带 `null`；其余字段必填。数组保留顺序。
+
+R3.4 控制帧与此 Message 封套独立：请求为 `{version:1,id,operation}`，
+响应为 `{version:1,id,result}`；操作和结果使用 `type/data` 标签。
+`id` 仅用于关联响应和拒绝同连接重复请求，不替代业务 `idempotencyKey`。
+TLS 1.3 校验证书链/名称/时间及预先可信 leaf pin 后才发送认证 secret；无明文降级。
+认证、邀请、owner 管理、pulse 和成员可见分页对账的边界见
+[R3.4 验证记录](2026-08-31-runtime-host-r3-4-verification.md)。Brain 当前只接受自有 Node 声明及 draft Task，
+Assignment/RunReceipt 的网络准入仍留给 R4；schema 或 pending 队列支持不等于执行授权。
 
 ## 消息封套
 
