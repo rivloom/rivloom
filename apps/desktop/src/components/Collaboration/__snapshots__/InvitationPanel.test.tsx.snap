@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`expires the display and never reissues; errors cannot echo a secret > uncertain invitation does not echo errors 1`] = `
+<p
+  class="_error_1ee605"
+  role="alert"
+>
+  创建结果不确定；未自动重试。请先核对 Brain 状态。
+</p>
+`;

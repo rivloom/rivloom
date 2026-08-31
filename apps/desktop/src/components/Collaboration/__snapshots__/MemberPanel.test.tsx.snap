@@ -1,0 +1,27 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`requires explicit named confirmation and hides management controls from non-owners > named revocation confirmation 1`] = `
+<div
+  aria-label="确认撤销成员"
+  class="_notice_1ee605"
+  role="group"
+>
+  <p>
+    确认撤销 Bob（bob）？该成员的 Node 将失去协作访问权限；此界面不提供恢复成员入口。
+  </p>
+  <div
+    class="_actions_1ee605"
+  >
+    <button
+      class="_button_1ee605 _danger_1ee605"
+    >
+      确认撤销
+    </button>
+    <button
+      class="_button_1ee605"
+    >
+      保留成员
+    </button>
+  </div>
+</div>
+`;
