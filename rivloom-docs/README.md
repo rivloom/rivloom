@@ -19,6 +19,7 @@ directory, which is reserved for upstream Codex documentation.
 - [R3.4 verification](plans/2026-08-31-runtime-host-r3-4-verification.md) tracks Node reconciliation and secure transport.
 - [R3 desktop hosting](plans/2026-08-31-r3-desktop-hosting-verification.md) tracks explicit trust bootstrap and local service lifecycle before the two-machine gate.
 - [R3 Node desktop](plans/2026-08-31-r3-node-desktop-verification.md) tracks persistent registration and explicit enrollment/connection commands.
+- [R3 collaboration UI](plans/2026-08-31-r3-collaboration-ui-verification.md) tracks bounded desktop inputs, explicit operations and visual validation.
 - [R3.3 verification](plans/2026-08-31-runtime-host-r3-3-verification.md) tracks Brain authority,
   persistence and recovery without implying that the two-machine gate has passed.
 - [R1/R2 Runtime Host Verification](plans/2026-08-30-runtime-host-r1-r2-verification.md)

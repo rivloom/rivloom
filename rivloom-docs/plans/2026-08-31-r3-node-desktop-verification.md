@@ -1,6 +1,11 @@
 # Gate R3：Node 桌面接线验证
 
-日期：2026-08-31。状态：Node 登记、会话、邀请及桌面命令已实现，Draft #86–#89 待合并；Gate R3 未通过。
+日期：2026-08-31。状态：Node 登记、会话、邀请及桌面命令 #86–#89 已合并；Gate R3 未通过。
+
+合并收尾：最新主干 `8b2190bfa6996cba654fdeeb54ae237270b7d883` 的文件树等于已验证的 #89 Head。
+独立 `r3-node-main-verification` worktree 的 334 + 4 + 4 + 4 Rust、95 前端、
+TypeScript/Vite、普通及 feature 测试配置 Clippy、桌面 Rust 格式检查通过。
+此前一次原生合成凭证读取异常仍保留，未宣称根因已解决。
 
 ## 已合并基线
 
