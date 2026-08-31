@@ -2757,6 +2757,7 @@ dependencies = [
  "time",
  "x509-parser",
  "yasna",
+ "zeroize",
 ]
 
 [[package]]
@@ -2904,6 +2905,7 @@ dependencies = [
 name = "rivloom-desktop"
 version = "0.1.0-alpha.0"
 dependencies = [
+ "base64 0.22.1",
  "dunce",
  "fs2",
  "getrandom 0.3.4",
@@ -2921,6 +2923,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tempfile",
  "thiserror 2.0.20",
+ "time",
  "windows-sys 0.61.2",
  "zeroize",
 ]

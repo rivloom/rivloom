@@ -9,6 +9,7 @@ mod protocol;
 mod reconcile;
 mod secret_store;
 mod server;
+mod server_identity;
 mod snapshot;
 mod storage;
 mod tls;
