@@ -111,6 +111,7 @@ impl TaskWorktreeManager {
                 path.as_os_str().to_owned(),
                 baseline_commit.clone().into(),
             ],
+            MAX_GIT_OUTPUT_BYTES,
         )
         .map_err(map_create_error)?;
         let canonical_path = dunce::canonicalize(&path).map_err(|_| WorktreeError::CreateFailed)?;
@@ -154,11 +155,7 @@ impl TaskWorktree {
     }
 
     pub(crate) fn cleanup(&self) -> WorktreeCleanup {
-        let paths_still_match = dunce::canonicalize(&self.managed_root)
-            .is_ok_and(|root| root == self.managed_root)
-            && dunce::canonicalize(&self.path).is_ok_and(|path| path == self.path);
-        if !paths_still_match || !exact_target(&self.managed_root, &self.path, &self.directory_name)
-        {
+        if !self.paths_still_match() {
             return WorktreeCleanup::Retained {
                 reason: WorktreeCleanupFailure::InvalidTarget,
             };
@@ -172,6 +169,7 @@ impl TaskWorktree {
                 "--force".into(),
                 self.path.as_os_str().to_owned(),
             ],
+            MAX_GIT_OUTPUT_BYTES,
         );
         match result {
             Err(GitCommandError::Unavailable) => WorktreeCleanup::Retained {
@@ -189,6 +187,23 @@ impl TaskWorktree {
             },
             Ok(_) => WorktreeCleanup::Removed,
         }
+    }
+
+    pub(super) fn git_output(
+        &self,
+        args: &[OsString],
+        max_output_bytes: u64,
+    ) -> Result<Vec<u8>, GitCommandError> {
+        if !self.paths_still_match() {
+            return Err(GitCommandError::Failed);
+        }
+        run_git(&self.git_program, &self.path, args, max_output_bytes)
+    }
+
+    fn paths_still_match(&self) -> bool {
+        dunce::canonicalize(&self.managed_root).is_ok_and(|root| root == self.managed_root)
+            && dunce::canonicalize(&self.path).is_ok_and(|path| path == self.path)
+            && exact_target(&self.managed_root, &self.path, &self.directory_name)
     }
 }
 
@@ -216,7 +231,7 @@ fn git_line(
     cwd: &std::path::Path,
     args: &[OsString],
 ) -> Result<String, GitCommandError> {
-    let output = run_git(program, cwd, args)?;
+    let output = run_git(program, cwd, args, MAX_GIT_OUTPUT_BYTES)?;
     let output = output.strip_suffix(b"\n").unwrap_or(&output);
     let output = output.strip_suffix(b"\r").unwrap_or(output);
     String::from_utf8(output.to_vec()).map_err(|_| GitCommandError::Failed)
@@ -226,6 +241,7 @@ fn run_git(
     program: &std::path::Path,
     cwd: &std::path::Path,
     args: &[OsString],
+    max_output_bytes: u64,
 ) -> Result<Vec<u8>, GitCommandError> {
     let mut child = Command::new(program)
         .arg("-C")
@@ -252,7 +268,7 @@ fn run_git(
         .spawn(move || {
             let mut output = Vec::new();
             let result = stdout
-                .take(MAX_GIT_OUTPUT_BYTES + 1)
+                .take(max_output_bytes.saturating_add(1))
                 .read_to_end(&mut output);
             let _ = sender.send((result, output));
         });
@@ -267,7 +283,7 @@ fn run_git(
         if captured.is_none()
             && let Ok((read_result, output)) = receiver.try_recv()
         {
-            if read_result.is_err() || output.len() as u64 > MAX_GIT_OUTPUT_BYTES {
+            if read_result.is_err() || output.len() as u64 > max_output_bytes {
                 let _ = child.kill();
                 let _ = child.wait();
                 let _ = reader.join();
@@ -284,9 +300,7 @@ fn run_git(
                 let output = match captured {
                     Some(output) => output,
                     None => match receiver.recv() {
-                        Ok((Ok(_), output)) if output.len() as u64 <= MAX_GIT_OUTPUT_BYTES => {
-                            output
-                        }
+                        Ok((Ok(_), output)) if output.len() as u64 <= max_output_bytes => output,
                         Ok((Ok(_), _)) => {
                             let _ = reader.join();
                             return Err(GitCommandError::OutputTooLarge);
@@ -341,7 +355,7 @@ fn map_create_error(error: GitCommandError) -> WorktreeError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GitCommandError {
+pub(super) enum GitCommandError {
     Unavailable,
     Failed,
     OutputTooLarge,

@@ -1,3 +1,4 @@
+mod artifact;
 mod service;
 mod state_machine;
 mod storage;
