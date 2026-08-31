@@ -1,6 +1,6 @@
 mod account;
 mod app_server;
-// R3.1 freezes the wire contract; transport consumers arrive in R3.2-R3.4.
+// R3 backend is not yet registered with desktop commands or automatic service startup.
 #[allow(dead_code)]
 mod collaboration;
 mod identity;

@@ -1,5 +1,6 @@
 mod brain;
 mod brain_tasks;
+mod client;
 mod credential;
 mod host;
 mod invitation;

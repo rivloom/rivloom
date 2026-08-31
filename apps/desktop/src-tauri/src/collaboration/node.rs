@@ -52,6 +52,11 @@ impl Node {
         self.ready
     }
 
+    /// Read-only completed projection; never includes a partially applied sync batch or credentials.
+    pub(super) fn shared_records(&self) -> impl Iterator<Item = &SharedRecord> {
+        self.records.values()
+    }
+
     pub(super) fn reconcile_request(&self) -> ReconcileRequest {
         self.sync
             .as_ref()
